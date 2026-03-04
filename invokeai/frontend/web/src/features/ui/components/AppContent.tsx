@@ -6,6 +6,7 @@ import { useStore } from '@nanostores/react';
 import { useAppSelector } from 'app/store/storeHooks';
 import Loading from 'common/components/Loading/Loading';
 import { VerticalNavBar } from 'features/ui/components/VerticalNavBar';
+import { BatchTabAutoLayout } from 'features/ui/layouts/batch-tab-auto-layout';
 import { CanvasTabAutoLayout } from 'features/ui/layouts/canvas-tab-auto-layout';
 import { GenerateTabAutoLayout } from 'features/ui/layouts/generate-tab-auto-layout';
 import { ModelsTabAutoLayout } from 'features/ui/layouts/models-tab-auto-layout';
@@ -35,6 +36,7 @@ const TabContent = memo(() => {
       {tab === 'canvas' && <CanvasTabAutoLayout />}
       {tab === 'upscaling' && <UpscalingTabAutoLayout />}
       {tab === 'workflows' && <WorkflowsTabAutoLayout />}
+      {tab === 'batch' && <BatchTabAutoLayout />}
       {tab === 'models' && <ModelsTabAutoLayout />}
       {tab === 'queue' && <QueueTabAutoLayout />}
       <SwitchingTabsLoader />

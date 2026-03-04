@@ -11,6 +11,7 @@ import type { IconType } from 'react-icons';
 import {
   PiBoundingBoxBold,
   PiCubeBold,
+  PiFlaskBold,
   PiFlowArrowBold,
   PiFrameCornersBold,
   PiQueueBold,
@@ -24,6 +25,7 @@ const TAB_ICONS: Record<TabName, IconType> = {
   canvas: PiBoundingBoxBold,
   upscaling: PiFrameCornersBold,
   workflows: PiFlowArrowBold,
+  batch: PiFlaskBold,
   models: PiCubeBold,
   queue: PiQueueBold,
 };

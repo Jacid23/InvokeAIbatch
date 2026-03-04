@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import {
   PiBoundingBoxBold,
   PiCubeBold,
+  PiFlaskBold,
   PiFlowArrowBold,
   PiFrameCornersBold,
   PiQueueBold,
@@ -30,6 +31,7 @@ export const VerticalNavBar = memo(() => {
         <TabButton tab="canvas" icon={<PiBoundingBoxBold />} label={t('ui.tabs.canvas')} />
         <TabButton tab="upscaling" icon={<PiFrameCornersBold />} label={t('ui.tabs.upscaling')} />
         <TabButton tab="workflows" icon={<PiFlowArrowBold />} label={t('ui.tabs.workflows')} />
+        <TabButton tab="batch" icon={<PiFlaskBold />} label={t('ui.tabs.batch')} />
       </Flex>
 
       <Spacer />

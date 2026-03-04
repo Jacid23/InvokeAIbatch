@@ -18,6 +18,8 @@ const config: KnipConfig = {
     // Auth features - exports will be used in follow-up phases
     'src/features/auth/**',
     'src/services/api/endpoints/auth.ts',
+    // Batch feature - store exports will be used as UI is completed
+    'src/features/batch/**',
   ],
   ignoreBinaries: ['only-allow'],
   ignoreDependencies: ['magic-string'],

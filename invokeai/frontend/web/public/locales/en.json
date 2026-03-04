@@ -2983,6 +2983,8 @@
             "queue": "Queue",
             "upscaling": "Upscaling",
             "upscalingTab": "$t(ui.tabs.upscaling) $t(common.tab)",
+            "batch": "Batch",
+            "batchTab": "$t(ui.tabs.batch) $t(common.tab)",
             "gallery": "Gallery"
         },
         "panels": {

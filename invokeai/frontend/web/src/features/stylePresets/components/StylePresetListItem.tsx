@@ -90,7 +90,7 @@ export const StylePresetListItem = ({ preset }: { preset: StylePresetRecordWithI
       w="full"
       alignItems="flex-start"
     >
-      <StylePresetImage presetImageUrl={preset.image} />
+      <StylePresetImage presetImageUrl={preset.image} imageWidth={32} />
       <Flex flexDir="column" w="full" alignItems="flex-start" flexGrow={1} minW={0} gap={2}>
         <Flex gap={2} w="full" justifyContent="space-between" alignItems="center" minW={0} minH={8}>
           <Text fontSize="md" noOfLines={2} fontWeight="semibold" color="base.100">

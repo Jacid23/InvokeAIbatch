@@ -59,9 +59,11 @@ export const CurrentImageButtons = memo(({ imageDTO }: { imageDTO: ImageDTO }) =
     });
   }, [dispatch, galleryPanel, imageDTO]);
 
-  const isCanvasOrGenerateTab = tab === 'canvas' || tab === 'generate';
-  const isCanvasOrGenerateOrUpscalingTab = tab === 'canvas' || tab === 'generate' || tab === 'upscaling';
-  const doesTabHaveGallery = tab === 'canvas' || tab === 'generate' || tab === 'workflows' || tab === 'upscaling';
+  const isCanvasOrGenerateTab = tab === 'canvas' || tab === 'generate' || tab === 'batch';
+  const isCanvasOrGenerateOrUpscalingTab =
+    tab === 'canvas' || tab === 'generate' || tab === 'upscaling' || tab === 'batch';
+  const doesTabHaveGallery =
+    tab === 'canvas' || tab === 'generate' || tab === 'workflows' || tab === 'upscaling' || tab === 'batch';
 
   const recallAll = useRecallAll(imageDTO);
   const recallRemix = useRecallRemix(imageDTO);
