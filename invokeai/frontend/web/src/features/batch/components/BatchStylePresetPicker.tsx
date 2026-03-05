@@ -1,4 +1,4 @@
-import { Button, Flex, IconButton, Text } from '@invoke-ai/ui-library';
+import { Badge, Button, Flex, IconButton, Spacer, Text } from '@invoke-ai/ui-library';
 import { EMPTY_ARRAY } from 'app/store/constants';
 import { useAppDispatch, useAppSelector } from 'app/store/storeHooks';
 import {
@@ -90,34 +90,45 @@ const BatchPresetItem = memo(({ preset, isInBatch, onAdd, onRemove }: BatchPrese
     <Button
       as={Flex}
       role="button"
-      gap={2}
+      gap={3}
       alignItems="flex-start"
       onClick={handleToggle}
-      p={2}
+      p={3}
       h="unset"
-      variant={isInBatch ? 'solid' : 'ghost'}
-      colorScheme={isInBatch ? 'invokeBlue' : undefined}
+      variant="ghost"
       w="full"
       cursor="pointer"
     >
-      {/* Left: thumbnail */}
-      {showThumbnails && <StylePresetImage presetImageUrl={preset.image} imageWidth={32} />}
-      {/* Right column: name+buttons row, then description below */}
+      {showThumbnails && <StylePresetImage presetImageUrl={preset.image} imageWidth={36} />}
       <Flex flexDir="column" flexGrow={1} minW={0} alignItems="flex-start" gap={1}>
-        <Flex gap={1} alignItems="center" w="full">
-          <Text fontSize="sm" noOfLines={1} fontWeight="semibold" flexGrow={1} minW={0} textAlign="left">
+        <Flex gap={1} alignItems="center" w="full" minW={0}>
+          <Text
+            fontSize="sm"
+            noOfLines={1}
+            fontWeight="semibold"
+            color="base.100"
+            flexGrow={1}
+            minW={0}
+            textAlign="left"
+          >
             {preset.name}
           </Text>
+          {isInBatch && (
+            <Badge color="invokeBlue.400" borderColor="invokeBlue.700" borderWidth={1} bg="transparent" flexShrink={0}>
+              {t('stylePresets.active')}
+            </Badge>
+          )}
+          <Spacer />
           <IconButton
             aria-label={isInBatch ? t('common.remove') : t('common.add')}
-            variant="ghost"
-            size="xs"
+            variant="link"
+            size="sm"
             icon={isInBatch ? <PiCheckBold /> : <PiPlusBold />}
             flexShrink={0}
             pointerEvents="none"
           />
           <IconButton
-            size="xs"
+            size="sm"
             variant="link"
             aria-label={t('stylePresets.copyTemplate')}
             onClick={handleCopy}
@@ -125,7 +136,7 @@ const BatchPresetItem = memo(({ preset, isInBatch, onAdd, onRemove }: BatchPrese
             flexShrink={0}
           />
           <IconButton
-            size="xs"
+            size="sm"
             variant="link"
             aria-label={t('stylePresets.editTemplate')}
             onClick={handleEdit}
@@ -133,7 +144,7 @@ const BatchPresetItem = memo(({ preset, isInBatch, onAdd, onRemove }: BatchPrese
             flexShrink={0}
           />
           <IconButton
-            size="xs"
+            size="sm"
             variant="link"
             colorScheme="error"
             aria-label={t('stylePresets.deleteTemplate')}
@@ -143,7 +154,7 @@ const BatchPresetItem = memo(({ preset, isInBatch, onAdd, onRemove }: BatchPrese
           />
         </Flex>
         {showPromptPreviews && preset.preset_data.positive_prompt && (
-          <Text fontSize="xs" color={isInBatch ? 'invokeBlue.100' : 'base.400'} whiteSpace="normal" textAlign="left">
+          <Text fontSize="xs" color="base.400" whiteSpace="normal" textAlign="left" noOfLines={2}>
             {preset.preset_data.positive_prompt}
           </Text>
         )}
@@ -201,16 +212,18 @@ export const BatchStylePresetPicker = memo(() => {
   );
 
   return (
-    <Flex flexDir="column" gap={2} p={2} layerStyle="second" borderRadius="base">
+    <Flex flexDir="column" gap={2} p={3} layerStyle="second" borderRadius="base">
       <Flex alignItems="center" gap={2} w="full" justifyContent="space-between">
-        <StylePresetSearch />
+        <Flex flexGrow={1} minW={0}>
+          <StylePresetSearch />
+        </Flex>
         <Flex alignItems="center" gap={1} flexShrink={0}>
           <StylePresetCreateButton />
           <StylePresetImportButton />
           <StylePresetExportButton />
         </Flex>
       </Flex>
-      <Flex flexDir="column" gap={1}>
+      <Flex flexDir="column" gap={1} w="full" minW={0}>
         {(userPresets as StylePresetRecordWithImage[]).map((preset) => (
           <BatchPresetItem
             key={preset.id}

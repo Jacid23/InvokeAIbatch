@@ -236,7 +236,7 @@ const BatchImageAccordion = memo(() => {
         <Flex gap={4} flexDirection="column" width="full">
           <FormControl>
             <InformationalPopover feature="paramAspect">
-              <FormLabel minW={10}>Preset</FormLabel>
+              <FormLabel minW={10}>Aspect</FormLabel>
             </InformationalPopover>
             <Flex gap={2}>
               <Select
@@ -251,7 +251,7 @@ const BatchImageAccordion = memo(() => {
                 <option value="custom">Custom</option>
                 {SIZE_PRESETS.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.id} ({p.width}×{p.height})
+                    {p.id}
                   </option>
                 ))}
               </Select>
@@ -345,7 +345,7 @@ const BatchGenerationAccordion = memo(() => {
   return (
     <StandaloneAccordion label="Generation" isOpen={isOpen} onToggle={onToggle}>
       <Box px={4} pt={4}>
-        <Flex flexDir="column" gap={4} pb={0}>
+        <Flex flexDir="column" gap={2} pb={0}>
           <Flex alignItems="center" justifyContent="space-between">
             <Text fontSize="xs" color="base.400" fontWeight="semibold" letterSpacing="wide" textTransform="uppercase">
               Models &amp; LoRAs

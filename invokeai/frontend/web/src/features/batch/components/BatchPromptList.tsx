@@ -139,7 +139,7 @@ export const BatchPromptList = memo(() => {
 
   return (
     <Flex flexDir="column" gap={2}>
-      <Flex gap={2} alignItems="center">
+      <Flex gap={2} alignItems="center" w="full" minW={0}>
         <PickerToggleButton />
         <ThumbnailToggleButton />
         <StylePresetPromptPreviewToggle />

@@ -14,7 +14,7 @@ export const BatchLoraSlots = memo(() => {
   }, [dispatch]);
 
   return (
-    <Flex flexDir="column" gap={2} w="full">
+    <Flex flexDir="column" gap={1.5} w="full">
       {slots.map((slot, index) => (
         <BatchLoraSlot key={slot.id} slot={slot} index={index} canRemove={slots.length > 1} />
       ))}

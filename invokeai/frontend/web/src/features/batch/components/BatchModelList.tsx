@@ -41,21 +41,41 @@ const BatchModelCard = memo(({ modelId, id }: { modelId: string; id: string }) =
   }
 
   return (
-    <Card variant="lora" opacity={entry.isEnabled ? 1 : 0.5} w="full">
-      <CardBody py={1} px={2}>
-        <Flex alignItems={showThumbnails ? 'flex-start' : 'center'} gap={2} w="full">
-          {showThumbnails && <StylePresetImage presetImageUrl={modelConfig?.cover_image ?? null} imageWidth={32} />}
-          <Text noOfLines={1} flexGrow={1} fontSize="sm" color={entry.isEnabled ? 'base.200' : 'base.500'}>
-            {modelConfig?.name ?? entry.model.key.substring(0, 12)}
-          </Text>
-          <Switch size="sm" isChecked={entry.isEnabled} onChange={handleToggle} />
-          <IconButton
-            aria-label="Remove model"
-            variant="ghost"
-            size="xs"
-            onClick={handleRemove}
-            icon={<PiTrashSimpleBold />}
-          />
+    <Card variant="lora" opacity={entry.isEnabled ? 1 : 0.7}>
+      <CardBody>
+        <Flex flexDir="column" gap={1} w="full">
+          {/* Row 1: Thumbnail + Name + Description */}
+          <Flex alignItems="flex-start" gap={2} w="full">
+            {showThumbnails && <StylePresetImage presetImageUrl={modelConfig?.cover_image ?? null} imageWidth={24} />}
+            <Flex flexDir="column" gap={1} flexGrow={1} minW={0}>
+              <Text
+                noOfLines={1}
+                wordBreak="break-all"
+                fontWeight="semibold"
+                flexGrow={1}
+                minW={0}
+                color={entry.isEnabled ? 'base.200' : 'base.500'}
+              >
+                {modelConfig?.name ?? entry.model.key.substring(0, 12)}
+              </Text>
+              {modelConfig?.description && (
+                <Text fontSize="xs" color="base.500" noOfLines={2} minW={0}>
+                  {modelConfig.description}
+                </Text>
+              )}
+            </Flex>
+          </Flex>
+          {/* Row 2: Controls — bottom right */}
+          <Flex alignItems="center" justifyContent="flex-end" gap={2}>
+            <Switch size="sm" isChecked={entry.isEnabled} onChange={handleToggle} />
+            <IconButton
+              aria-label="Remove model"
+              variant="ghost"
+              size="sm"
+              onClick={handleRemove}
+              icon={<PiTrashSimpleBold />}
+            />
+          </Flex>
         </Flex>
       </CardBody>
     </Card>
@@ -89,7 +109,7 @@ export const BatchModelList = memo(() => {
   );
 
   return (
-    <Flex flexDir="column" gap={2} w="full">
+    <Flex flexDir="column" gap={1.5} w="full">
       <InformationalPopover feature="paramModel">
         <ModelPicker
           pickerId="batch-model-picker"
@@ -103,7 +123,7 @@ export const BatchModelList = memo(() => {
         />
       </InformationalPopover>
       {models.length > 0 && (
-        <Flex flexDir="column" gap={1} w="full">
+        <Flex flexWrap="wrap" gap={2} w="full">
           {models.map((m) => (
             <BatchModelCard key={m.id} id={m.id} modelId={m.model.key} />
           ))}

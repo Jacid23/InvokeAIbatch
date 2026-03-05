@@ -4,7 +4,6 @@ import {
   CompositeNumberInput,
   CompositeSlider,
   Flex,
-  FormControl,
   IconButton,
   Switch,
   Text,
@@ -54,34 +53,27 @@ export const BatchLoraCard = memo(({ slotId, lora }: BatchLoraCardProps) => {
   }, [dispatch, slotId, lora.id]);
 
   return (
-    <Card variant="lora" w="full">
-      <CardBody py={1} px={2}>
-        <Flex flexDir="column" gap={1}>
-          {/* Name row: thumbnail + name + toggle + trash */}
-          <Flex alignItems={showThumbnails ? 'flex-start' : 'center'} w="full" gap={2}>
-            {showThumbnails && <StylePresetImage presetImageUrl={loraConfig?.cover_image ?? null} imageWidth={32} />}
+    <Card variant="lora" opacity={lora.isEnabled ? 1 : 0.7}>
+      <CardBody>
+        <Flex flexDir="column" gap={1} w="full">
+          {/* Row 1: Thumbnail + Name — tops aligned */}
+          <Flex alignItems="flex-start" gap={2} w="full">
+            {showThumbnails && <StylePresetImage presetImageUrl={loraConfig?.cover_image ?? null} imageWidth={24} />}
             <Text
               noOfLines={1}
               wordBreak="break-all"
               color={lora.isEnabled ? 'base.200' : 'base.500'}
-              fontSize="sm"
+              fontWeight="semibold"
               flexGrow={1}
+              minW={0}
+              pt={0.5}
             >
               {loraConfig?.name ?? lora.model.key.substring(0, 12)}
             </Text>
-            <Switch size="sm" isChecked={lora.isEnabled} onChange={handleToggle} flexShrink={0} />
-            <IconButton
-              aria-label="Remove LoRA"
-              variant="ghost"
-              size="xs"
-              onClick={handleRemove}
-              icon={<PiTrashSimpleBold />}
-              flexShrink={0}
-            />
           </Flex>
-          {/* Weight row */}
+          {/* Row 2: Slider + Number + Toggle + Trash — number stays with slider */}
           <InformationalPopover feature="loraWeight">
-            <FormControl isDisabled={!lora.isEnabled}>
+            <Flex alignItems="center" gap={2} w="full">
               <CompositeSlider
                 value={lora.weight}
                 onChange={handleWeightChange}
@@ -91,6 +83,7 @@ export const BatchLoraCard = memo(({ slotId, lora }: BatchLoraCardProps) => {
                 fineStep={DEFAULT_LORA_WEIGHT_CONFIG.fineStep}
                 marks={MARKS}
                 defaultValue={DEFAULT_LORA_WEIGHT_CONFIG.initial}
+                isDisabled={!lora.isEnabled}
               />
               <CompositeNumberInput
                 value={lora.weight}
@@ -102,9 +95,25 @@ export const BatchLoraCard = memo(({ slotId, lora }: BatchLoraCardProps) => {
                 w={20}
                 flexShrink={0}
                 defaultValue={DEFAULT_LORA_WEIGHT_CONFIG.initial}
+                isDisabled={!lora.isEnabled}
               />
-            </FormControl>
+              <Switch size="sm" isChecked={lora.isEnabled} onChange={handleToggle} flexShrink={0} />
+              <IconButton
+                aria-label="Remove LoRA"
+                variant="ghost"
+                size="sm"
+                onClick={handleRemove}
+                icon={<PiTrashSimpleBold />}
+                flexShrink={0}
+              />
+            </Flex>
           </InformationalPopover>
+          {/* Row 3: Description */}
+          {loraConfig?.description && (
+            <Text fontSize="xs" color="base.500" noOfLines={2} minW={0}>
+              {loraConfig.description}
+            </Text>
+          )}
         </Flex>
       </CardBody>
     </Card>

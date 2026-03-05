@@ -1,4 +1,4 @@
-import { Card, CardBody, Flex, IconButton, Text } from '@invoke-ai/ui-library';
+import { Flex, IconButton, Text } from '@invoke-ai/ui-library';
 import { EMPTY_ARRAY } from 'app/store/constants';
 import { useAppDispatch, useAppSelector } from 'app/store/storeHooks';
 import { BatchLoraCard } from 'features/batch/components/BatchLoraCard';
@@ -68,49 +68,47 @@ export const BatchLoraSlot = memo(({ slot, index, canRemove }: BatchLoraSlotProp
     if (compatibleLoRAs.length === 0) {
       return currentBaseModel ? 'No compatible LoRAs' : 'Select a model first';
     }
-    return 'Add LoRA to slot...';
+    return 'Add LoRA...';
   }, [isLoading, compatibleLoRAs.length, currentBaseModel]);
 
   return (
-    <Card variant="lora" w="full">
-      <CardBody py={1.5} px={2}>
-        <Flex flexDir="column" gap={1.5}>
-          {/* Slot label + picker + remove slot — all on one row */}
-          <Flex alignItems="center" gap={2} w="full">
-            <Text fontSize="xs" fontWeight="semibold" color="base.400" flexShrink={0}>
-              Slot {index + 1}
-            </Text>
-            <ModelPicker
-              pickerId={`batch-lora-slot-${slot.id}`}
-              modelConfigs={compatibleLoRAs}
-              selectedModelConfig={undefined}
-              onChange={handleAddLora as (model: unknown) => void}
-              grouped={false}
-              allowEmpty
-              placeholder={placeholder}
-              getIsOptionDisabled={getIsDisabled as (model: unknown) => boolean}
-            />
-            {canRemove && (
-              <IconButton
-                aria-label="Remove slot"
-                variant="ghost"
-                size="xs"
-                onClick={handleRemoveSlot}
-                icon={<PiTrashSimpleBold />}
-                flexShrink={0}
-              />
-            )}
-          </Flex>
-          {slot.loras.length > 0 && (
-            <Flex flexDir="column" gap={1} w="full">
-              {slot.loras.map((lora) => (
-                <BatchLoraCard key={lora.id} slotId={slot.id} lora={lora} />
-              ))}
-            </Flex>
-          )}
+    <Flex flexDir="column" gap={1.5} w="full">
+      {/* Row 1: Slot label + trash (own line) */}
+      <Flex alignItems="center" justifyContent="space-between" w="full">
+        <Text fontSize="xs" fontWeight="semibold" color="base.400" letterSpacing="wide" textTransform="uppercase">
+          LoRA Slot {index + 1}
+        </Text>
+        {canRemove && (
+          <IconButton
+            aria-label="Remove slot"
+            variant="ghost"
+            size="sm"
+            onClick={handleRemoveSlot}
+            icon={<PiTrashSimpleBold />}
+            flexShrink={0}
+          />
+        )}
+      </Flex>
+      {/* Row 2: Full-width dropdown — matches model picker width */}
+      <ModelPicker
+        pickerId={`batch-lora-slot-${slot.id}`}
+        modelConfigs={compatibleLoRAs}
+        selectedModelConfig={undefined}
+        onChange={handleAddLora as (model: unknown) => void}
+        grouped={false}
+        allowEmpty
+        placeholder={placeholder}
+        getIsOptionDisabled={getIsDisabled as (model: unknown) => boolean}
+      />
+      {/* LoRA cards — wrapping grid like gen tab LoRAList */}
+      {slot.loras.length > 0 && (
+        <Flex flexWrap="wrap" gap={2} w="full">
+          {slot.loras.map((lora) => (
+            <BatchLoraCard key={lora.id} slotId={slot.id} lora={lora} />
+          ))}
         </Flex>
-      </CardBody>
-    </Card>
+      )}
+    </Flex>
   );
 });
 BatchLoraSlot.displayName = 'BatchLoraSlot';
