@@ -1,18 +1,10 @@
-import {
-  Badge,
-  CompositeNumberInput,
-  CompositeSlider,
-  Flex,
-  FormControl,
-  FormLabel,
-  IconButton,
-} from '@invoke-ai/ui-library';
+import { Button, CompositeNumberInput, CompositeSlider, Flex, FormControl, FormLabel } from '@invoke-ai/ui-library';
 import type { Feature } from 'common/components/InformationalPopover/constants';
 import { InformationalPopover } from 'common/components/InformationalPopover/InformationalPopover';
 import { memo, useCallback, useState } from 'react';
-import { PiPlusBold, PiXBold } from 'react-icons/pi';
+import { PiXBold } from 'react-icons/pi';
 
-// ─── Chip sub-component (avoids inline arrow fns in JSX) ──────────────────────
+// ─── Chip sub-component ───────────────────────────────────────────────────────
 
 type BatchSweepChipProps = {
   value: number;
@@ -22,23 +14,29 @@ type BatchSweepChipProps = {
 const BatchSweepChip = memo(({ value, onRemove }: BatchSweepChipProps) => {
   const handleClick = useCallback(() => onRemove(value), [onRemove, value]);
   return (
-    <Badge
-      display="flex"
+    <Flex
+      as="button"
+      type="button"
+      onClick={handleClick}
+      title={`Remove ${value}`}
       alignItems="center"
+      justifyContent="center"
       gap={1}
       px={2}
       py={0.5}
       borderRadius="md"
-      colorScheme="accent"
-      variant="subtle"
+      bg="base.750"
+      color="base.300"
+      fontSize="xs"
+      fontWeight="normal"
       cursor="pointer"
-      userSelect="none"
-      onClick={handleClick}
-      title={`Remove ${value}`}
+      flexShrink={0}
+      border="none"
+      _hover={{ bg: 'base.700', color: 'base.200' }}
     >
       {value}
       <PiXBold size={9} />
-    </Badge>
+    </Flex>
   );
 });
 BatchSweepChip.displayName = 'BatchSweepChip';
@@ -94,6 +92,7 @@ export const BatchSweepInput = memo(
 
     return (
       <Flex flexDir="column" gap={1}>
+        {/* Slider + number input row */}
         <FormControl>
           {feature !== undefined ? (
             <InformationalPopover feature={feature}>
@@ -123,23 +122,28 @@ export const BatchSweepInput = memo(
             w={20}
             flexShrink={0}
           />
-          <IconButton
-            aria-label={`Add ${label} value`}
-            icon={<PiPlusBold />}
-            onClick={handleAdd}
-            size="sm"
-            variant="ghost"
-            flexShrink={0}
-            isDisabled={values.includes(pendingValue)}
-          />
         </FormControl>
-        {values.length > 0 && (
-          <Flex gap={1} flexWrap="wrap" ps={1}>
-            {values.map((v) => (
-              <BatchSweepChip key={v} value={v} onRemove={handleRemove} />
-            ))}
-          </Flex>
-        )}
+        {/* Grouped add + chips — thin border makes the sweep section visually distinct */}
+        <Flex flexDir="column" gap={1} borderWidth="1px" borderColor="base.700" borderRadius="md" p={2}>
+          <Button
+            onClick={handleAdd}
+            size="xs"
+            variant="ghost"
+            isDisabled={values.includes(pendingValue)}
+            w="full"
+            justifyContent="flex-start"
+            color="base.400"
+          >
+            + Add to sweep
+          </Button>
+          {values.length > 0 && (
+            <Flex gap={1} flexWrap="wrap">
+              {values.map((v) => (
+                <BatchSweepChip key={v} value={v} onRemove={handleRemove} />
+              ))}
+            </Flex>
+          )}
+        </Flex>
       </Flex>
     );
   }

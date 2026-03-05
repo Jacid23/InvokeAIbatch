@@ -2,9 +2,12 @@ import {
   Box,
   CompositeNumberInput,
   CompositeSlider,
+  Expander,
   Flex,
   FormControl,
   FormLabel,
+  Grid,
+  GridItem,
   IconButton,
   Select,
   StandaloneAccordion,
@@ -32,10 +35,18 @@ import {
   selectBatchShowThumbnails,
   selectBatchSlice,
 } from 'features/batch/store/batchSlice';
+import { selectFluxDypePreset } from 'features/controlLayers/store/paramsSlice';
+import ParamFluxDypeExponent from 'features/parameters/components/Core/ParamFluxDypeExponent';
+import ParamFluxDypePreset from 'features/parameters/components/Core/ParamFluxDypePreset';
+import ParamFluxDypeScale from 'features/parameters/components/Core/ParamFluxDypeScale';
+import ParamFluxScheduler from 'features/parameters/components/Core/ParamFluxScheduler';
+import { AdvancedSettingsAccordion } from 'features/settingsAccordions/components/AdvancedSettingsAccordion/AdvancedSettingsAccordion';
+import { useExpanderToggle } from 'features/settingsAccordions/hooks/useExpanderToggle';
 import { useStandaloneAccordionToggle } from 'features/settingsAccordions/hooks/useStandaloneAccordionToggle';
 import { OverlayScrollbarsComponent } from 'overlayscrollbars-react';
 import { type ChangeEvent, type ChangeEventHandler, memo, useCallback, useMemo } from 'react';
 import { PiArrowsLeftRight, PiCaretDownBold, PiImages } from 'react-icons/pi';
+import { useMeasure } from 'react-use';
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -119,6 +130,69 @@ const BatchSeedAccordion = memo(() => {
 });
 BatchSeedAccordion.displayName = 'BatchSeedAccordion';
 
+// ─── Dimensions Preview ───────────────────────────────────────────────────────
+
+const BatchDimensionsPreview = memo(() => {
+  const batch = useAppSelector(selectBatchSlice);
+  const [ref, dims] = useMeasure<HTMLDivElement>();
+
+  const previewBoxSize = useMemo(() => {
+    if (!dims || dims.width === 0) {
+      return { width: 0, height: 0 };
+    }
+    const aspectRatioValue = batch.width / batch.height;
+    let width: number;
+    let height: number;
+    if (batch.width > batch.height) {
+      width = dims.width;
+      height = width / aspectRatioValue;
+    } else {
+      height = dims.height;
+      width = height * aspectRatioValue;
+    }
+    return { width, height };
+  }, [dims, batch.width, batch.height]);
+
+  return (
+    <Flex w="full" h="full" alignItems="center" justifyContent="center" ref={ref}>
+      <Flex
+        position="relative"
+        borderRadius="base"
+        borderColor="base.600"
+        borderWidth="3px"
+        width={`${previewBoxSize.width}px`}
+        height={`${previewBoxSize.height}px`}
+        alignItems="center"
+        justifyContent="center"
+      >
+        <Grid
+          borderRadius="base"
+          position="absolute"
+          top={0}
+          right={0}
+          bottom={0}
+          left={0}
+          gridTemplateColumns="1fr 1fr 1fr"
+          gridTemplateRows="1fr 1fr 1fr"
+          gap="1px"
+          bg="base.700"
+        >
+          <GridItem bg="base.800" />
+          <GridItem bg="base.800" />
+          <GridItem bg="base.800" />
+          <GridItem bg="base.800" />
+          <GridItem bg="base.800" />
+          <GridItem bg="base.800" />
+          <GridItem bg="base.800" />
+          <GridItem bg="base.800" />
+          <GridItem bg="base.800" />
+        </Grid>
+      </Flex>
+    </Flex>
+  );
+});
+BatchDimensionsPreview.displayName = 'BatchDimensionsPreview';
+
 // ─── Image Size Accordion ─────────────────────────────────────────────────────
 
 const BatchImageAccordion = memo(() => {
@@ -157,84 +231,91 @@ const BatchImageAccordion = memo(() => {
       isOpen={isOpen}
       onToggle={onToggle}
     >
-      <Flex px={4} pt={4} pb={4} flexDir="column" gap={4}>
-        <FormControl>
-          <InformationalPopover feature="paramAspect">
-            <FormLabel>Size Preset</FormLabel>
-          </InformationalPopover>
-          <Flex gap={2}>
-            <Select
-              value={selectedPresetId}
-              onChange={handlePresetChange}
-              size="sm"
-              cursor="pointer"
-              iconSize="0.75rem"
-              icon={<PiCaretDownBold />}
-              flexGrow={1}
-            >
-              <option value="custom">Custom</option>
-              {SIZE_PRESETS.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.id} ({p.width}×{p.height})
-                </option>
-              ))}
-            </Select>
-            <IconButton
-              aria-label="Swap width and height"
-              icon={<PiArrowsLeftRight />}
-              onClick={handleSwap}
-              size="sm"
-              variant="ghost"
-              flexShrink={0}
+      <Flex px={4} pt={4} pb={4} gap={4} alignItems="center">
+        {/* Left column: controls */}
+        <Flex gap={4} flexDirection="column" width="full">
+          <FormControl>
+            <InformationalPopover feature="paramAspect">
+              <FormLabel minW={10}>Preset</FormLabel>
+            </InformationalPopover>
+            <Flex gap={2}>
+              <Select
+                value={selectedPresetId}
+                onChange={handlePresetChange}
+                size="sm"
+                cursor="pointer"
+                iconSize="0.75rem"
+                icon={<PiCaretDownBold />}
+                flexGrow={1}
+              >
+                <option value="custom">Custom</option>
+                {SIZE_PRESETS.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.id} ({p.width}×{p.height})
+                  </option>
+                ))}
+              </Select>
+              <IconButton
+                aria-label="Swap width and height"
+                icon={<PiArrowsLeftRight />}
+                onClick={handleSwap}
+                size="sm"
+                variant="ghost"
+                flexShrink={0}
+              />
+            </Flex>
+          </FormControl>
+          <FormControl>
+            <InformationalPopover feature="paramWidth">
+              <FormLabel minW={10}>Width</FormLabel>
+            </InformationalPopover>
+            <CompositeSlider
+              value={batch.width}
+              onChange={handleWidthChange}
+              defaultValue={DIM_DEFAULT}
+              min={DIM_SLIDER_MIN}
+              max={DIM_SLIDER_MAX}
+              step={DIM_STEP}
+              fineStep={DIM_FINE_STEP}
             />
-          </Flex>
-        </FormControl>
-        <FormControl>
-          <InformationalPopover feature="paramWidth">
-            <FormLabel>Width</FormLabel>
-          </InformationalPopover>
-          <CompositeSlider
-            value={batch.width}
-            onChange={handleWidthChange}
-            defaultValue={DIM_DEFAULT}
-            min={DIM_SLIDER_MIN}
-            max={DIM_SLIDER_MAX}
-            step={DIM_STEP}
-            fineStep={DIM_FINE_STEP}
-          />
-          <CompositeNumberInput
-            value={batch.width}
-            onChange={handleWidthChange}
-            defaultValue={DIM_DEFAULT}
-            min={DIM_SLIDER_MIN}
-            max={DIM_INPUT_MAX}
-            step={DIM_STEP}
-            fineStep={DIM_FINE_STEP}
-          />
-        </FormControl>
-        <FormControl>
-          <InformationalPopover feature="paramHeight">
-            <FormLabel>Height</FormLabel>
-          </InformationalPopover>
-          <CompositeSlider
-            value={batch.height}
-            onChange={handleHeightChange}
-            defaultValue={DIM_DEFAULT}
-            min={DIM_SLIDER_MIN}
-            max={DIM_SLIDER_MAX}
-            step={DIM_STEP}
-            fineStep={DIM_FINE_STEP}
-          />
-          <CompositeNumberInput
-            value={batch.height}
-            onChange={handleHeightChange}
-            defaultValue={DIM_DEFAULT}
-            min={DIM_SLIDER_MIN}
-            max={DIM_INPUT_MAX}
-            step={DIM_STEP}
-            fineStep={DIM_FINE_STEP}
-          />
-        </FormControl>
+            <CompositeNumberInput
+              value={batch.width}
+              onChange={handleWidthChange}
+              defaultValue={DIM_DEFAULT}
+              min={DIM_SLIDER_MIN}
+              max={DIM_INPUT_MAX}
+              step={DIM_STEP}
+              fineStep={DIM_FINE_STEP}
+            />
+          </FormControl>
+          <FormControl>
+            <InformationalPopover feature="paramHeight">
+              <FormLabel minW={10}>Height</FormLabel>
+            </InformationalPopover>
+            <CompositeSlider
+              value={batch.height}
+              onChange={handleHeightChange}
+              defaultValue={DIM_DEFAULT}
+              min={DIM_SLIDER_MIN}
+              max={DIM_SLIDER_MAX}
+              step={DIM_STEP}
+              fineStep={DIM_FINE_STEP}
+            />
+            <CompositeNumberInput
+              value={batch.height}
+              onChange={handleHeightChange}
+              defaultValue={DIM_DEFAULT}
+              min={DIM_SLIDER_MIN}
+              max={DIM_INPUT_MAX}
+              step={DIM_STEP}
+              fineStep={DIM_FINE_STEP}
+            />
+          </FormControl>
+        </Flex>
+        {/* Right column: aspect ratio preview grid */}
+        <Flex w="108px" h="108px" flexShrink={0} flexGrow={0} alignItems="center" justifyContent="center">
+          <BatchDimensionsPreview />
+        </Flex>
       </Flex>
     </StandaloneAccordion>
   );
@@ -247,7 +328,12 @@ const BatchGenerationAccordion = memo(() => {
   const dispatch = useAppDispatch();
   const batch = useAppSelector(selectBatchSlice);
   const showThumbnails = useAppSelector(selectBatchShowThumbnails);
+  const fluxDypePreset = useAppSelector(selectFluxDypePreset);
   const { isOpen, onToggle } = useStandaloneAccordionToggle({ id: 'batch-generation', defaultIsOpen: true });
+  const { isOpen: isOpenAdvanced, onToggle: onToggleAdvanced } = useExpanderToggle({
+    id: 'batch-generation-advanced',
+    defaultIsOpen: false,
+  });
 
   const handleStepsChange = useCallback((values: number[]) => dispatch(batchStepsValuesChanged(values)), [dispatch]);
   const handleGuidanceChange = useCallback(
@@ -258,50 +344,60 @@ const BatchGenerationAccordion = memo(() => {
 
   return (
     <StandaloneAccordion label="Generation" isOpen={isOpen} onToggle={onToggle}>
-      <Flex px={4} pt={4} pb={4} flexDir="column" gap={4}>
-        <Flex alignItems="center" justifyContent="space-between">
-          <Text fontSize="xs" color="base.400" fontWeight="semibold" letterSpacing="wide" textTransform="uppercase">
-            Models &amp; LoRAs
-          </Text>
-          <IconButton
-            aria-label={showThumbnails ? 'Hide thumbnails' : 'Show thumbnails'}
-            icon={<PiImages />}
-            onClick={handleToggleThumbnails}
-            size="xs"
-            variant="ghost"
-            isActive={showThumbnails}
-            title={showThumbnails ? 'Hide thumbnails' : 'Show thumbnails'}
-          />
+      <Box px={4} pt={4}>
+        <Flex flexDir="column" gap={4} pb={0}>
+          <Flex alignItems="center" justifyContent="space-between">
+            <Text fontSize="xs" color="base.400" fontWeight="semibold" letterSpacing="wide" textTransform="uppercase">
+              Models &amp; LoRAs
+            </Text>
+            <IconButton
+              aria-label={showThumbnails ? 'Hide thumbnails' : 'Show thumbnails'}
+              icon={<PiImages />}
+              onClick={handleToggleThumbnails}
+              size="xs"
+              variant="ghost"
+              isActive={showThumbnails}
+              title={showThumbnails ? 'Hide thumbnails' : 'Show thumbnails'}
+            />
+          </Flex>
+          <BatchModelList />
+          <BatchLoraSlots />
         </Flex>
-        <BatchModelList />
-        <BatchLoraSlots />
-        <BatchSweepInput
-          label="Steps"
-          feature="paramSteps"
-          values={batch.stepsValues}
-          onChange={handleStepsChange}
-          min={1}
-          max={500}
-          sliderMax={100}
-          step={1}
-          fineStep={1}
-          defaultValue={30}
-          marks={STEPS_MARKS}
-        />
-        <BatchSweepInput
-          label="Guidance"
-          feature="paramGuidance"
-          values={batch.guidanceValues}
-          onChange={handleGuidanceChange}
-          min={0}
-          max={20}
-          sliderMax={7}
-          step={0.5}
-          fineStep={0.1}
-          defaultValue={3.5}
-          marks={GUIDANCE_MARKS}
-        />
-      </Flex>
+        <Expander label="Advanced options" isOpen={isOpenAdvanced} onToggle={onToggleAdvanced}>
+          <Flex gap={4} flexDir="column" pb={4}>
+            <ParamFluxScheduler />
+            <ParamFluxDypePreset />
+            {fluxDypePreset === 'manual' && <ParamFluxDypeScale />}
+            {fluxDypePreset === 'manual' && <ParamFluxDypeExponent />}
+            <BatchSweepInput
+              label="Steps"
+              feature="paramSteps"
+              values={batch.stepsValues}
+              onChange={handleStepsChange}
+              min={1}
+              max={500}
+              sliderMax={100}
+              step={1}
+              fineStep={1}
+              defaultValue={30}
+              marks={STEPS_MARKS}
+            />
+            <BatchSweepInput
+              label="Guidance"
+              feature="paramGuidance"
+              values={batch.guidanceValues}
+              onChange={handleGuidanceChange}
+              min={0}
+              max={20}
+              sliderMax={7}
+              step={0.5}
+              fineStep={0.1}
+              defaultValue={3.5}
+              marks={GUIDANCE_MARKS}
+            />
+          </Flex>
+        </Expander>
+      </Box>
     </StandaloneAccordion>
   );
 });
@@ -320,6 +416,7 @@ export const BatchParametersPanel = memo(() => {
               <BatchSeedAccordion />
               <BatchImageAccordion />
               <BatchGenerationAccordion />
+              <AdvancedSettingsAccordion />
             </Flex>
           </OverlayScrollbarsComponent>
         </Box>

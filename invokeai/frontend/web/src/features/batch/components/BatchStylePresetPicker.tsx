@@ -1,7 +1,12 @@
 import { Button, Flex, IconButton, Text } from '@invoke-ai/ui-library';
 import { EMPTY_ARRAY } from 'app/store/constants';
 import { useAppDispatch, useAppSelector } from 'app/store/storeHooks';
-import { batchPromptAdded, batchPromptRemoved, selectBatchPrompts } from 'features/batch/store/batchSlice';
+import {
+  batchPromptAdded,
+  batchPromptRemoved,
+  selectBatchPrompts,
+  selectBatchShowThumbnails,
+} from 'features/batch/store/batchSlice';
 import { useDeleteStylePreset } from 'features/stylePresets/components/DeleteStylePresetDialog';
 import { StylePresetCreateButton } from 'features/stylePresets/components/StylePresetCreateButton';
 import { StylePresetExportButton } from 'features/stylePresets/components/StylePresetExportButton';
@@ -9,7 +14,7 @@ import StylePresetImage from 'features/stylePresets/components/StylePresetImage'
 import { StylePresetImportButton } from 'features/stylePresets/components/StylePresetImportButton';
 import StylePresetSearch from 'features/stylePresets/components/StylePresetSearch';
 import { $stylePresetModalState } from 'features/stylePresets/store/stylePresetModal';
-import { selectStylePresetSearchTerm } from 'features/stylePresets/store/stylePresetSlice';
+import { selectShowPromptPreviews, selectStylePresetSearchTerm } from 'features/stylePresets/store/stylePresetSlice';
 import { memo, type MouseEvent, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PiCheckBold, PiCopyBold, PiPencilBold, PiPlusBold, PiTrashBold } from 'react-icons/pi';
@@ -26,6 +31,8 @@ type BatchPresetItemProps = {
 const BatchPresetItem = memo(({ preset, isInBatch, onAdd, onRemove }: BatchPresetItemProps) => {
   const { t } = useTranslation();
   const deleteStylePreset = useDeleteStylePreset();
+  const showPromptPreviews = useAppSelector(selectShowPromptPreviews);
+  const showThumbnails = useAppSelector(selectBatchShowThumbnails);
 
   const handleToggle = useCallback(() => {
     if (isInBatch) {
@@ -84,59 +91,63 @@ const BatchPresetItem = memo(({ preset, isInBatch, onAdd, onRemove }: BatchPrese
       as={Flex}
       role="button"
       gap={2}
+      alignItems="flex-start"
       onClick={handleToggle}
       p={2}
       h="unset"
       variant={isInBatch ? 'solid' : 'ghost'}
       colorScheme={isInBatch ? 'invokeBlue' : undefined}
       w="full"
-      alignItems="center"
       cursor="pointer"
     >
-      <StylePresetImage presetImageUrl={preset.image} imageWidth={32} />
-      <Flex flexDir="column" flexGrow={1} alignItems="flex-start" minW={0}>
-        <Text fontSize="sm" noOfLines={1} fontWeight="semibold">
-          {preset.name}
-        </Text>
-        {preset.preset_data.positive_prompt && (
-          <Text fontSize="xs" noOfLines={1} color={isInBatch ? 'invokeBlue.100' : 'base.400'}>
+      {/* Left: thumbnail */}
+      {showThumbnails && <StylePresetImage presetImageUrl={preset.image} imageWidth={32} />}
+      {/* Right column: name+buttons row, then description below */}
+      <Flex flexDir="column" flexGrow={1} minW={0} alignItems="flex-start" gap={1}>
+        <Flex gap={1} alignItems="center" w="full">
+          <Text fontSize="sm" noOfLines={1} fontWeight="semibold" flexGrow={1} minW={0} textAlign="left">
+            {preset.name}
+          </Text>
+          <IconButton
+            aria-label={isInBatch ? t('common.remove') : t('common.add')}
+            variant="ghost"
+            size="xs"
+            icon={isInBatch ? <PiCheckBold /> : <PiPlusBold />}
+            flexShrink={0}
+            pointerEvents="none"
+          />
+          <IconButton
+            size="xs"
+            variant="link"
+            aria-label={t('stylePresets.copyTemplate')}
+            onClick={handleCopy}
+            icon={<PiCopyBold />}
+            flexShrink={0}
+          />
+          <IconButton
+            size="xs"
+            variant="link"
+            aria-label={t('stylePresets.editTemplate')}
+            onClick={handleEdit}
+            icon={<PiPencilBold />}
+            flexShrink={0}
+          />
+          <IconButton
+            size="xs"
+            variant="link"
+            colorScheme="error"
+            aria-label={t('stylePresets.deleteTemplate')}
+            onClick={handleDelete}
+            icon={<PiTrashBold />}
+            flexShrink={0}
+          />
+        </Flex>
+        {showPromptPreviews && preset.preset_data.positive_prompt && (
+          <Text fontSize="xs" color={isInBatch ? 'invokeBlue.100' : 'base.400'} whiteSpace="normal" textAlign="left">
             {preset.preset_data.positive_prompt}
           </Text>
         )}
       </Flex>
-      <IconButton
-        aria-label={isInBatch ? t('common.remove') : t('common.add')}
-        variant="ghost"
-        size="xs"
-        icon={isInBatch ? <PiCheckBold /> : <PiPlusBold />}
-        flexShrink={0}
-        pointerEvents="none"
-      />
-      <IconButton
-        size="xs"
-        variant="link"
-        aria-label={t('stylePresets.copyTemplate')}
-        onClick={handleCopy}
-        icon={<PiCopyBold />}
-        flexShrink={0}
-      />
-      <IconButton
-        size="xs"
-        variant="link"
-        aria-label={t('stylePresets.editTemplate')}
-        onClick={handleEdit}
-        icon={<PiPencilBold />}
-        flexShrink={0}
-      />
-      <IconButton
-        size="xs"
-        variant="link"
-        colorScheme="error"
-        aria-label={t('stylePresets.deleteTemplate')}
-        onClick={handleDelete}
-        icon={<PiTrashBold />}
-        flexShrink={0}
-      />
     </Button>
   );
 });
@@ -199,7 +210,7 @@ export const BatchStylePresetPicker = memo(() => {
           <StylePresetExportButton />
         </Flex>
       </Flex>
-      <Flex flexDir="column" gap={1} maxH="300px" overflowY="auto">
+      <Flex flexDir="column" gap={1}>
         {(userPresets as StylePresetRecordWithImage[]).map((preset) => (
           <BatchPresetItem
             key={preset.id}

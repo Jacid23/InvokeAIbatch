@@ -1,7 +1,6 @@
 import { Button, Flex, Spacer, useShiftModifier } from '@invoke-ai/ui-library';
 import { useStore } from '@nanostores/react';
 import { useAppSelector } from 'app/store/storeHooks';
-import { BatchComboCounter } from 'features/batch/components/BatchComboCounter';
 import { BatchPresetSelector } from 'features/batch/components/BatchPresetSelector';
 import { useEnqueueBatch } from 'features/batch/hooks/useEnqueueBatch';
 import { $isBatchEnqueueing } from 'features/batch/store/batchReadiness';
@@ -58,7 +57,6 @@ export const BatchQueueControls = memo(() => {
     <Flex w="full" position="relative" borderRadius="base" gap={2} flexDir="column">
       <Flex gap={2} alignItems="center">
         <BatchInvokeButton />
-        <BatchComboCounter />
         <Spacer />
         <QueueActionsMenuButton />
         <CancelCurrentQueueItemIconButton />

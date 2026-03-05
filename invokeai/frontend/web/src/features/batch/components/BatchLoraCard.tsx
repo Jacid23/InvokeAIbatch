@@ -1,13 +1,11 @@
 import {
   Card,
   CardBody,
-  CardHeader,
   CompositeNumberInput,
   CompositeSlider,
   Flex,
-  Icon,
+  FormControl,
   IconButton,
-  Image,
   Switch,
   Text,
 } from '@invoke-ai/ui-library';
@@ -18,68 +16,13 @@ import {
   batchLoRARemovedFromSlot,
   batchLoRAToggled,
   batchLoRAWeightChanged,
+  selectBatchShowThumbnails,
 } from 'features/batch/store/batchSlice';
-import { selectBatchShowThumbnails } from 'features/batch/store/batchSlice';
 import { DEFAULT_LORA_WEIGHT_CONFIG } from 'features/controlLayers/store/lorasSlice';
+import StylePresetImage from 'features/stylePresets/components/StylePresetImage';
 import { memo, useCallback } from 'react';
-import { PiImage, PiTrashSimpleBold } from 'react-icons/pi';
+import { PiTrashSimpleBold } from 'react-icons/pi';
 import { useGetModelConfigQuery } from 'services/api/endpoints/models';
-
-// ─── Thumbnail ────────────────────────────────────────────────────────────────
-
-const THUMB_SIZE = '32px';
-
-const BatchLoraThumbnail = memo(({ imageUrl }: { imageUrl?: string | null }) => {
-  if (!imageUrl) {
-    return (
-      <Flex
-        w={THUMB_SIZE}
-        h={THUMB_SIZE}
-        minW={THUMB_SIZE}
-        bg="base.850"
-        borderRadius="base"
-        borderWidth="1px"
-        borderColor="base.750"
-        alignItems="center"
-        justifyContent="center"
-        flexShrink={0}
-      >
-        <Icon as={PiImage} color="base.500" boxSize="16px" />
-      </Flex>
-    );
-  }
-  return (
-    <Image
-      src={imageUrl}
-      w={THUMB_SIZE}
-      h={THUMB_SIZE}
-      minW={THUMB_SIZE}
-      objectFit="cover"
-      objectPosition="50% 50%"
-      borderRadius="base"
-      borderWidth="1px"
-      borderColor="base.750"
-      flexShrink={0}
-      fallback={
-        <Flex
-          w={THUMB_SIZE}
-          h={THUMB_SIZE}
-          minW={THUMB_SIZE}
-          bg="base.850"
-          borderRadius="base"
-          borderWidth="1px"
-          borderColor="base.750"
-          alignItems="center"
-          justifyContent="center"
-          flexShrink={0}
-        >
-          <Icon as={PiImage} color="base.500" boxSize="16px" />
-        </Flex>
-      }
-    />
-  );
-});
-BatchLoraThumbnail.displayName = 'BatchLoraThumbnail';
 
 // ─── LoRA Card ────────────────────────────────────────────────────────────────
 
@@ -112,59 +55,57 @@ export const BatchLoraCard = memo(({ slotId, lora }: BatchLoraCardProps) => {
 
   return (
     <Card variant="lora" w="full">
-      <CardHeader>
-        <Flex alignItems="center" justifyContent="space-between" width="100%" gap={2}>
-          {showThumbnails && <BatchLoraThumbnail imageUrl={loraConfig?.cover_image} />}
-          <Text
-            noOfLines={1}
-            wordBreak="break-all"
-            color={lora.isEnabled ? 'base.200' : 'base.500'}
-            fontSize="sm"
-            flexGrow={1}
-          >
-            {loraConfig?.name ?? lora.model.key.substring(0, 12)}
-          </Text>
-          <Flex alignItems="center" gap={1} flexShrink={0}>
-            <Switch size="sm" isChecked={lora.isEnabled} onChange={handleToggle} />
+      <CardBody py={1} px={2}>
+        <Flex flexDir="column" gap={1}>
+          {/* Name row: thumbnail + name + toggle + trash */}
+          <Flex alignItems={showThumbnails ? 'flex-start' : 'center'} w="full" gap={2}>
+            {showThumbnails && <StylePresetImage presetImageUrl={loraConfig?.cover_image ?? null} imageWidth={32} />}
+            <Text
+              noOfLines={1}
+              wordBreak="break-all"
+              color={lora.isEnabled ? 'base.200' : 'base.500'}
+              fontSize="sm"
+              flexGrow={1}
+            >
+              {loraConfig?.name ?? lora.model.key.substring(0, 12)}
+            </Text>
+            <Switch size="sm" isChecked={lora.isEnabled} onChange={handleToggle} flexShrink={0} />
             <IconButton
               aria-label="Remove LoRA"
               variant="ghost"
               size="xs"
               onClick={handleRemove}
               icon={<PiTrashSimpleBold />}
+              flexShrink={0}
             />
           </Flex>
+          {/* Weight row */}
+          <InformationalPopover feature="loraWeight">
+            <FormControl isDisabled={!lora.isEnabled}>
+              <CompositeSlider
+                value={lora.weight}
+                onChange={handleWeightChange}
+                min={DEFAULT_LORA_WEIGHT_CONFIG.sliderMin}
+                max={DEFAULT_LORA_WEIGHT_CONFIG.sliderMax}
+                step={DEFAULT_LORA_WEIGHT_CONFIG.coarseStep}
+                fineStep={DEFAULT_LORA_WEIGHT_CONFIG.fineStep}
+                marks={MARKS}
+                defaultValue={DEFAULT_LORA_WEIGHT_CONFIG.initial}
+              />
+              <CompositeNumberInput
+                value={lora.weight}
+                onChange={handleWeightChange}
+                min={DEFAULT_LORA_WEIGHT_CONFIG.numberInputMin}
+                max={DEFAULT_LORA_WEIGHT_CONFIG.numberInputMax}
+                step={DEFAULT_LORA_WEIGHT_CONFIG.coarseStep}
+                fineStep={DEFAULT_LORA_WEIGHT_CONFIG.fineStep}
+                w={20}
+                flexShrink={0}
+                defaultValue={DEFAULT_LORA_WEIGHT_CONFIG.initial}
+              />
+            </FormControl>
+          </InformationalPopover>
         </Flex>
-      </CardHeader>
-      <CardBody>
-        <InformationalPopover feature="loraWeight">
-          <Text fontSize="xs" color="base.400" mb={1}>
-            Weight
-          </Text>
-        </InformationalPopover>
-        <CompositeSlider
-          value={lora.weight}
-          onChange={handleWeightChange}
-          min={DEFAULT_LORA_WEIGHT_CONFIG.sliderMin}
-          max={DEFAULT_LORA_WEIGHT_CONFIG.sliderMax}
-          step={DEFAULT_LORA_WEIGHT_CONFIG.coarseStep}
-          fineStep={DEFAULT_LORA_WEIGHT_CONFIG.fineStep}
-          marks={MARKS}
-          defaultValue={DEFAULT_LORA_WEIGHT_CONFIG.initial}
-          isDisabled={!lora.isEnabled}
-        />
-        <CompositeNumberInput
-          value={lora.weight}
-          onChange={handleWeightChange}
-          min={DEFAULT_LORA_WEIGHT_CONFIG.numberInputMin}
-          max={DEFAULT_LORA_WEIGHT_CONFIG.numberInputMax}
-          step={DEFAULT_LORA_WEIGHT_CONFIG.coarseStep}
-          fineStep={DEFAULT_LORA_WEIGHT_CONFIG.fineStep}
-          w={20}
-          flexShrink={0}
-          defaultValue={DEFAULT_LORA_WEIGHT_CONFIG.initial}
-          isDisabled={!lora.isEnabled}
-        />
       </CardBody>
     </Card>
   );

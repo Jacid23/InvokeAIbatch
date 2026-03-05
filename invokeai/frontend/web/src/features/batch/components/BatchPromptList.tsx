@@ -1,9 +1,15 @@
-import { Button, Flex, Text, Textarea } from '@invoke-ai/ui-library';
+import { Button, Flex, IconButton, Text, Textarea } from '@invoke-ai/ui-library';
 import { useStore } from '@nanostores/react';
 import { useAppDispatch, useAppSelector } from 'app/store/storeHooks';
 import { BatchPromptCard } from 'features/batch/components/BatchPromptCard';
 import { BatchStylePresetPicker } from 'features/batch/components/BatchStylePresetPicker';
-import { batchPromptAdded, selectBatchPrompts } from 'features/batch/store/batchSlice';
+import {
+  batchPromptAdded,
+  batchShowThumbnailsToggled,
+  selectBatchPrompts,
+  selectBatchShowThumbnails,
+} from 'features/batch/store/batchSlice';
+import { StylePresetPromptPreviewToggle } from 'features/stylePresets/components/StylePresetPromptPreviewToggle';
 import { atom } from 'nanostores';
 import { type ChangeEvent, type KeyboardEvent, memo, useCallback, useState } from 'react';
 import { PiCaretDownBold, PiCaretUpBold, PiImagesBold, PiPlusBold } from 'react-icons/pi';
@@ -109,13 +115,35 @@ const AddManualPromptButton = memo(() => {
 });
 AddManualPromptButton.displayName = 'AddManualPromptButton';
 
+const ThumbnailToggleButton = memo(() => {
+  const dispatch = useAppDispatch();
+  const showThumbnails = useAppSelector(selectBatchShowThumbnails);
+  const handleToggle = useCallback(() => dispatch(batchShowThumbnailsToggled()), [dispatch]);
+  return (
+    <IconButton
+      aria-label={showThumbnails ? 'Hide thumbnails' : 'Show thumbnails'}
+      icon={<PiImagesBold />}
+      onClick={handleToggle}
+      size="sm"
+      variant="ghost"
+      isActive={showThumbnails}
+      title={showThumbnails ? 'Hide thumbnails' : 'Show thumbnails'}
+    />
+  );
+});
+ThumbnailToggleButton.displayName = 'ThumbnailToggleButton';
+
 export const BatchPromptList = memo(() => {
   const prompts = useAppSelector(selectBatchPrompts);
   const isPickerOpen = useStore($isPickerOpen);
 
   return (
     <Flex flexDir="column" gap={2}>
-      <PickerToggleButton />
+      <Flex gap={2} alignItems="center">
+        <PickerToggleButton />
+        <ThumbnailToggleButton />
+        <StylePresetPromptPreviewToggle />
+      </Flex>
       {isPickerOpen && <BatchStylePresetPicker />}
       {prompts.length > 0 ? (
         <Flex flexDir="column" gap={1}>

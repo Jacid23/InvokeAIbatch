@@ -1,4 +1,4 @@
-import { Card, CardBody, Flex, FormControl, IconButton, Text } from '@invoke-ai/ui-library';
+import { Card, CardBody, Flex, IconButton, Text } from '@invoke-ai/ui-library';
 import { EMPTY_ARRAY } from 'app/store/constants';
 import { useAppDispatch, useAppSelector } from 'app/store/storeHooks';
 import { BatchLoraCard } from 'features/batch/components/BatchLoraCard';
@@ -22,7 +22,6 @@ export const BatchLoraSlot = memo(({ slot, index, canRemove }: BatchLoraSlotProp
   const currentBaseModel = useAppSelector(selectBase);
   const currentMainModelConfig = useAppSelector(selectMainModelConfig);
 
-  // Filter LoRAs compatible with current base model
   const compatibleLoRAs = useMemo(() => {
     if (!currentBaseModel) {
       return EMPTY_ARRAY;
@@ -44,7 +43,6 @@ export const BatchLoraSlot = memo(({ slot, index, canRemove }: BatchLoraSlotProp
     });
   }, [allLoraConfigs, currentBaseModel, currentMainModelConfig]);
 
-  // Already-added LoRA keys in THIS slot
   const addedLoraKeys = useMemo(() => new Set(slot.loras.map((l) => l.model.key)), [slot.loras]);
 
   const getIsDisabled = useCallback((model: LoRAModelConfig) => addedLoraKeys.has(model.key), [addedLoraKeys]);
@@ -75,23 +73,13 @@ export const BatchLoraSlot = memo(({ slot, index, canRemove }: BatchLoraSlotProp
 
   return (
     <Card variant="lora" w="full">
-      <CardBody p={2}>
-        <Flex flexDir="column" gap={2}>
-          <Flex alignItems="center" justifyContent="space-between">
-            <Text fontSize="xs" fontWeight="semibold" color="base.400">
+      <CardBody py={1.5} px={2}>
+        <Flex flexDir="column" gap={1.5}>
+          {/* Slot label + picker + remove slot — all on one row */}
+          <Flex alignItems="center" gap={2} w="full">
+            <Text fontSize="xs" fontWeight="semibold" color="base.400" flexShrink={0}>
               Slot {index + 1}
             </Text>
-            {canRemove && (
-              <IconButton
-                aria-label="Remove slot"
-                variant="ghost"
-                size="xs"
-                onClick={handleRemoveSlot}
-                icon={<PiTrashSimpleBold />}
-              />
-            )}
-          </Flex>
-          <FormControl>
             <ModelPicker
               pickerId={`batch-lora-slot-${slot.id}`}
               modelConfigs={compatibleLoRAs}
@@ -102,7 +90,17 @@ export const BatchLoraSlot = memo(({ slot, index, canRemove }: BatchLoraSlotProp
               placeholder={placeholder}
               getIsOptionDisabled={getIsDisabled as (model: unknown) => boolean}
             />
-          </FormControl>
+            {canRemove && (
+              <IconButton
+                aria-label="Remove slot"
+                variant="ghost"
+                size="xs"
+                onClick={handleRemoveSlot}
+                icon={<PiTrashSimpleBold />}
+                flexShrink={0}
+              />
+            )}
+          </Flex>
           {slot.loras.length > 0 && (
             <Flex flexDir="column" gap={1} w="full">
               {slot.loras.map((lora) => (

@@ -2944,7 +2944,7 @@
         "positivePromptColumn": "'prompt' or 'positive_prompt'",
         "negativePromptColumn": "'negative_prompt'",
         "insertPlaceholder": "Insert placeholder",
-        "myTemplates": "My Templates",
+        "myTemplates": "My Prompts",
         "name": "Name",
         "negativePrompt": "Negative Prompt",
         "noTemplates": "No templates",

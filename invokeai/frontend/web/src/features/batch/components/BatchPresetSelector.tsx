@@ -97,12 +97,12 @@ export const BatchPresetSelector = memo(() => {
           onChange={handleSaveNameChange}
           onKeyDown={handleKeyDown}
           placeholder="Preset name..."
-          size="sm"
+          size="md"
           flexGrow={1}
           autoFocus
         />
         <Button
-          size="sm"
+          size="md"
           colorScheme="invokeYellow"
           onClick={handleConfirmSave}
           isDisabled={!saveName.trim()}
@@ -110,7 +110,7 @@ export const BatchPresetSelector = memo(() => {
         >
           Save
         </Button>
-        <IconButton aria-label="Cancel save" icon={<PiXBold />} size="sm" variant="ghost" onClick={handleCancelSave} />
+        <IconButton aria-label="Cancel save" icon={<PiXBold />} size="md" variant="ghost" onClick={handleCancelSave} />
       </Flex>
     );
   }
@@ -120,13 +120,13 @@ export const BatchPresetSelector = memo(() => {
       <Select
         value={selectedPresetId}
         onChange={handleSelectPreset}
-        size="sm"
+        size="md"
         flexGrow={1}
         cursor="pointer"
         iconSize="0.75rem"
         icon={<PiCaretDownBold />}
       >
-        <option value="">Load preset...</option>
+        <option value="">Load or save workspace preset</option>
         {presets.map((p) => (
           <option key={p.id} value={p.id}>
             {p.name}
@@ -136,7 +136,7 @@ export const BatchPresetSelector = memo(() => {
       <IconButton
         aria-label="Save preset"
         icon={<PiFloppyDiskBold />}
-        size="sm"
+        size="md"
         variant="ghost"
         onClick={handleStartSave}
         title="Save current config as preset"
@@ -145,7 +145,7 @@ export const BatchPresetSelector = memo(() => {
         <IconButton
           aria-label="Delete preset"
           icon={<PiTrashSimpleBold />}
-          size="sm"
+          size="md"
           variant="ghost"
           colorScheme="error"
           onClick={handleDelete}

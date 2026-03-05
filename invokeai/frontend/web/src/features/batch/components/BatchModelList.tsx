@@ -1,4 +1,4 @@
-import { Card, CardBody, Flex, Icon, IconButton, Image, Switch, Text } from '@invoke-ai/ui-library';
+import { Card, CardBody, Flex, IconButton, Switch, Text } from '@invoke-ai/ui-library';
 import { useAppDispatch, useAppSelector } from 'app/store/storeHooks';
 import { InformationalPopover } from 'common/components/InformationalPopover/InformationalPopover';
 import {
@@ -9,67 +9,12 @@ import {
   selectBatchShowThumbnails,
 } from 'features/batch/store/batchSlice';
 import { ModelPicker } from 'features/parameters/components/ModelPicker';
+import StylePresetImage from 'features/stylePresets/components/StylePresetImage';
 import { memo, useCallback } from 'react';
-import { PiImage, PiTrashSimpleBold } from 'react-icons/pi';
+import { PiTrashSimpleBold } from 'react-icons/pi';
 import { useGetModelConfigQuery } from 'services/api/endpoints/models';
 import { useMainModels } from 'services/api/hooks/modelsByType';
 import type { AnyModelConfig, MainModelConfig } from 'services/api/types';
-
-// ─── Thumbnail ────────────────────────────────────────────────────────────────
-
-const THUMB_SIZE = '36px';
-
-const BatchModelThumbnail = memo(({ imageUrl }: { imageUrl?: string | null }) => {
-  if (!imageUrl) {
-    return (
-      <Flex
-        w={THUMB_SIZE}
-        h={THUMB_SIZE}
-        minW={THUMB_SIZE}
-        bg="base.850"
-        borderRadius="base"
-        borderWidth="1px"
-        borderColor="base.750"
-        alignItems="center"
-        justifyContent="center"
-        flexShrink={0}
-      >
-        <Icon as={PiImage} color="base.500" boxSize="18px" />
-      </Flex>
-    );
-  }
-  return (
-    <Image
-      src={imageUrl}
-      w={THUMB_SIZE}
-      h={THUMB_SIZE}
-      minW={THUMB_SIZE}
-      objectFit="cover"
-      objectPosition="50% 50%"
-      borderRadius="base"
-      borderWidth="1px"
-      borderColor="base.750"
-      flexShrink={0}
-      fallback={
-        <Flex
-          w={THUMB_SIZE}
-          h={THUMB_SIZE}
-          minW={THUMB_SIZE}
-          bg="base.850"
-          borderRadius="base"
-          borderWidth="1px"
-          borderColor="base.750"
-          alignItems="center"
-          justifyContent="center"
-          flexShrink={0}
-        >
-          <Icon as={PiImage} color="base.500" boxSize="18px" />
-        </Flex>
-      }
-    />
-  );
-});
-BatchModelThumbnail.displayName = 'BatchModelThumbnail';
 
 // ─── Model Card ───────────────────────────────────────────────────────────────
 
@@ -97,9 +42,9 @@ const BatchModelCard = memo(({ modelId, id }: { modelId: string; id: string }) =
 
   return (
     <Card variant="lora" opacity={entry.isEnabled ? 1 : 0.5} w="full">
-      <CardBody py={1.5} px={2}>
-        <Flex alignItems="center" gap={2}>
-          {showThumbnails && <BatchModelThumbnail imageUrl={modelConfig?.cover_image} />}
+      <CardBody py={1} px={2}>
+        <Flex alignItems={showThumbnails ? 'flex-start' : 'center'} gap={2} w="full">
+          {showThumbnails && <StylePresetImage presetImageUrl={modelConfig?.cover_image ?? null} imageWidth={32} />}
           <Text noOfLines={1} flexGrow={1} fontSize="sm" color={entry.isEnabled ? 'base.200' : 'base.500'}>
             {modelConfig?.name ?? entry.model.key.substring(0, 12)}
           </Text>
