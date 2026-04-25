@@ -1,13 +1,14 @@
-import { Divider, Flex, Spacer } from '@invoke-ai/ui-library';
+import { Divider, Flex, IconButton, Spacer, Tooltip } from '@invoke-ai/ui-library';
 import { UserMenu } from 'features/auth/components/UserMenu';
 import InvokeAILogoComponent from 'features/system/components/InvokeAILogoComponent';
 import SettingsMenu from 'features/system/components/SettingsModal/SettingsMenu';
 import StatusIndicator from 'features/system/components/StatusIndicator';
 import { VideosModalButton } from 'features/system/components/VideosModal/VideosModalButton';
-import { memo } from 'react';
+import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   PiBoundingBoxBold,
+  PiBrowserBold,
   PiCubeBold,
   PiFlaskBold,
   PiFlowArrowBold,
@@ -18,6 +19,19 @@ import {
 
 import { Notifications } from './Notifications';
 import { TabButton } from './TabButton';
+
+const DuplicateTabButton = memo(() => {
+  const handleClick = useCallback(() => {
+    window.open(window.location.href, '_blank');
+  }, []);
+
+  return (
+    <Tooltip label="Open in New Tab" placement="end">
+      <IconButton aria-label="Open in New Tab" onClick={handleClick} icon={<PiBrowserBold />} variant="ghost" />
+    </Tooltip>
+  );
+});
+DuplicateTabButton.displayName = 'DuplicateTabButton';
 
 export const VerticalNavBar = memo(() => {
   const { t } = useTranslation();
@@ -36,6 +50,7 @@ export const VerticalNavBar = memo(() => {
 
       <Spacer />
 
+      <DuplicateTabButton />
       <StatusIndicator />
       <TabButton tab="models" icon={<PiCubeBold />} label={t('ui.tabs.models')} />
       <TabButton tab="queue" icon={<PiQueueBold />} label={t('ui.tabs.queue')} />

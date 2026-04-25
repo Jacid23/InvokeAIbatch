@@ -19,7 +19,7 @@ const GallerySettingsPopover = () => {
   return (
     <FormControl>
       <FormLabel>{t('gallery.galleryImageSize')}</FormLabel>
-      <CompositeSlider value={galleryImageMinimumWidth} onChange={onChange} min={45} max={256} defaultValue={90} />
+      <CompositeSlider value={galleryImageMinimumWidth} onChange={onChange} min={45} max={512} defaultValue={90} />
     </FormControl>
   );
 };

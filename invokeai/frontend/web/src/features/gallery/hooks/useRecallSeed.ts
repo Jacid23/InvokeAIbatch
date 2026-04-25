@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useDebouncedMetadata } from 'services/api/hooks/useDebouncedMetadata';
 import type { ImageDTO } from 'services/api/types';
 
-const ALLOWED_TABS: TabName[] = ['canvas', 'generate', 'upscaling'];
+const ALLOWED_TABS: TabName[] = ['canvas', 'generate', 'upscaling', 'batch'];
 
 export const useRecallSeed = (imageDTO: ImageDTO) => {
   const store = useAppStore();

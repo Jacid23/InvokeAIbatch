@@ -1,11 +1,14 @@
-import { Flex, IconButton, Text } from '@invoke-ai/ui-library';
+import { Flex, FormControl, FormLabel, IconButton, Text } from '@invoke-ai/ui-library';
 import { EMPTY_ARRAY } from 'app/store/constants';
 import { useAppDispatch, useAppSelector } from 'app/store/storeHooks';
+import { InformationalPopover } from 'common/components/InformationalPopover/InformationalPopover';
+import type { GroupStatusMap } from 'common/components/Picker/Picker';
 import { BatchLoraCard } from 'features/batch/components/BatchLoraCard';
 import { batchLoRAAddedToSlot, type BatchLoRASlot, batchLoRASlotRemoved } from 'features/batch/store/batchSlice';
 import { selectBase, selectMainModelConfig } from 'features/controlLayers/store/paramsSlice';
 import { ModelPicker } from 'features/parameters/components/ModelPicker';
 import { memo, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PiTrashSimpleBold } from 'react-icons/pi';
 import { useLoRAModels } from 'services/api/hooks/modelsByType';
 import type { LoRAModelConfig } from 'services/api/types';
@@ -17,6 +20,7 @@ type BatchLoraSlotProps = {
 };
 
 export const BatchLoraSlot = memo(({ slot, index, canRemove }: BatchLoraSlotProps) => {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const [allLoraConfigs, { isLoading }] = useLoRAModels();
   const currentBaseModel = useAppSelector(selectBase);
@@ -63,13 +67,20 @@ export const BatchLoraSlot = memo(({ slot, index, canRemove }: BatchLoraSlotProp
 
   const placeholder = useMemo(() => {
     if (isLoading) {
-      return 'Loading...';
+      return t('common.loading');
     }
     if (compatibleLoRAs.length === 0) {
-      return currentBaseModel ? 'No compatible LoRAs' : 'Select a model first';
+      return currentBaseModel ? t('models.noCompatibleLoRAs') : t('models.selectModel');
     }
-    return 'Add LoRA...';
-  }, [isLoading, compatibleLoRAs.length, currentBaseModel]);
+    return t('models.addLora');
+  }, [isLoading, compatibleLoRAs.length, currentBaseModel, t]);
+
+  const initialGroupStates = useMemo(() => {
+    if (!currentBaseModel) {
+      return undefined;
+    }
+    return { [currentBaseModel]: true } satisfies GroupStatusMap;
+  }, [currentBaseModel]);
 
   return (
     <Flex flexDir="column" gap={1.5} w="full">
@@ -89,17 +100,24 @@ export const BatchLoraSlot = memo(({ slot, index, canRemove }: BatchLoraSlotProp
           />
         )}
       </Flex>
-      {/* Row 2: Full-width dropdown — matches model picker width */}
-      <ModelPicker
-        pickerId={`batch-lora-slot-${slot.id}`}
-        modelConfigs={compatibleLoRAs}
-        selectedModelConfig={undefined}
-        onChange={handleAddLora as (model: unknown) => void}
-        grouped={false}
-        allowEmpty
-        placeholder={placeholder}
-        getIsOptionDisabled={getIsDisabled as (model: unknown) => boolean}
-      />
+      {/* Row 2: Label + dropdown — matches Gen tab LoRASelect */}
+      <FormControl gap={2}>
+        <InformationalPopover feature="lora">
+          <FormLabel>{t('models.concepts')}</FormLabel>
+        </InformationalPopover>
+        <ModelPicker
+          pickerId={`batch-lora-slot-${slot.id}`}
+          modelConfigs={compatibleLoRAs}
+          selectedModelConfig={undefined}
+          onChange={handleAddLora as (model: unknown) => void}
+          grouped={false}
+          allowEmpty
+          placeholder={placeholder}
+          getIsOptionDisabled={getIsDisabled as (model: unknown) => boolean}
+          initialGroupStates={initialGroupStates}
+          noOptionsText={currentBaseModel ? t('models.noCompatibleLoRAs') : t('models.selectModel')}
+        />
+      </FormControl>
       {/* LoRA cards — wrapping grid like gen tab LoRAList */}
       {slot.loras.length > 0 && (
         <Flex flexWrap="wrap" gap={2} w="full">

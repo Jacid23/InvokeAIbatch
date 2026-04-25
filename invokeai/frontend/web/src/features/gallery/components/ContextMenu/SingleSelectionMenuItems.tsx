@@ -43,11 +43,13 @@ const SingleSelectionMenuItems = ({ imageDTO }: SingleSelectionMenuItemsProps) =
       </IconMenuItemGroup>
       <MenuDivider />
       <ContextMenuItemLoadWorkflow />
-      {(tab === 'canvas' || tab === 'generate') && <ContextMenuItemMetadataRecallActionsCanvasGenerateTabs />}
+      {(tab === 'canvas' || tab === 'generate' || tab === 'batch') && (
+        <ContextMenuItemMetadataRecallActionsCanvasGenerateTabs />
+      )}
       {tab === 'upscaling' && <ContextMenuItemMetadataRecallActionsUpscaleTab />}
       <MenuDivider />
       <ContextMenuItemSendToUpscale />
-      {(tab === 'canvas' || tab === 'generate') && <ContextMenuItemUseAsRefImage />}
+      {(tab === 'canvas' || tab === 'generate' || tab === 'batch') && <ContextMenuItemUseAsRefImage />}
       <ContextMenuItemUseAsPromptTemplate />
       <ContextMenuItemNewCanvasFromImageSubMenu />
       {tab === 'canvas' && <ContextMenuItemNewLayerFromImageSubMenu />}
@@ -55,7 +57,7 @@ const SingleSelectionMenuItems = ({ imageDTO }: SingleSelectionMenuItemsProps) =
       <MenuDivider />
       <ContextMenuItemChangeBoard />
       <ContextMenuItemStarUnstar />
-      {(tab === 'canvas' || tab === 'generate' || tab === 'workflows' || tab === 'upscaling') &&
+      {(tab === 'canvas' || tab === 'generate' || tab === 'workflows' || tab === 'upscaling' || tab === 'batch') &&
         !imageDTO.is_intermediate && (
           // Only render this button on tabs with a gallery.
           <ContextMenuItemLocateInGalery />

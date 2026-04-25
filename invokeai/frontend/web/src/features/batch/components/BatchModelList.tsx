@@ -1,4 +1,4 @@
-import { Card, CardBody, Flex, IconButton, Switch, Text } from '@invoke-ai/ui-library';
+import { Card, CardBody, Flex, FormLabel, IconButton, Switch, Text } from '@invoke-ai/ui-library';
 import { useAppDispatch, useAppSelector } from 'app/store/storeHooks';
 import { InformationalPopover } from 'common/components/InformationalPopover/InformationalPopover';
 import {
@@ -11,6 +11,7 @@ import {
 import { ModelPicker } from 'features/parameters/components/ModelPicker';
 import StylePresetImage from 'features/stylePresets/components/StylePresetImage';
 import { memo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { PiTrashSimpleBold } from 'react-icons/pi';
 import { useGetModelConfigQuery } from 'services/api/endpoints/models';
 import { useMainModels } from 'services/api/hooks/modelsByType';
@@ -86,6 +87,7 @@ BatchModelCard.displayName = 'BatchModelCard';
 // ─── Model List ───────────────────────────────────────────────────────────────
 
 export const BatchModelList = memo(() => {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const models = useAppSelector(selectBatchModels);
   const [modelConfigs] = useMainModels();
@@ -110,7 +112,10 @@ export const BatchModelList = memo(() => {
 
   return (
     <Flex flexDir="column" gap={1.5} w="full">
-      <InformationalPopover feature="paramModel">
+      <Flex alignItems="center" gap={2}>
+        <InformationalPopover feature="paramModel">
+          <FormLabel>{t('modelManager.model')}</FormLabel>
+        </InformationalPopover>
         <ModelPicker
           pickerId="batch-model-picker"
           modelConfigs={modelConfigs}
@@ -121,7 +126,7 @@ export const BatchModelList = memo(() => {
           placeholder="Add model..."
           getIsOptionDisabled={getIsDisabled}
         />
-      </InformationalPopover>
+      </Flex>
       {models.length > 0 && (
         <Flex flexWrap="wrap" gap={2} w="full">
           {models.map((m) => (

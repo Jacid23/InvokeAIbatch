@@ -3,7 +3,7 @@ import { DockviewReact, GridviewReact, LayoutPriority, Orientation } from 'dockv
 import { BoardsPanel } from 'features/gallery/components/BoardsListPanelContent';
 import { GalleryPanel } from 'features/gallery/components/GalleryPanel';
 import { ImageViewerPanel } from 'features/gallery/components/ImageViewer/ImageViewerPanel';
-import { FloatingLeftPanelButtons } from 'features/ui/components/FloatingLeftPanelButtons';
+import { FloatingBatchLeftPanelButtons } from 'features/ui/components/FloatingBatchLeftPanelButtons';
 import { FloatingRightPanelButtons } from 'features/ui/components/FloatingRightPanelButtons';
 import type {
   AutoLayoutDockviewComponents,
@@ -20,7 +20,6 @@ import { memo, useCallback, useEffect } from 'react';
 
 import { BatchLaunchpadPanel } from './BatchLaunchpadPanel';
 import { BatchTabLeftPanel } from './BatchTabLeftPanel';
-import { DockviewTab } from './DockviewTab';
 import { DockviewTabLaunchpad } from './DockviewTabLaunchpad';
 import { DockviewTabProgress } from './DockviewTabProgress';
 import { navigationApi } from './navigation-api';
@@ -29,7 +28,6 @@ import {
   BOARD_PANEL_DEFAULT_HEIGHT_PX,
   BOARD_PANEL_MIN_HEIGHT_PX,
   BOARDS_PANEL_ID,
-  DOCKVIEW_TAB_ID,
   DOCKVIEW_TAB_LAUNCHPAD_ID,
   DOCKVIEW_TAB_PROGRESS_ID,
   GALLERY_PANEL_DEFAULT_HEIGHT_PX,
@@ -46,7 +44,6 @@ import {
 } from './shared';
 
 const tabComponents = {
-  [DOCKVIEW_TAB_ID]: DockviewTab,
   [DOCKVIEW_TAB_PROGRESS_ID]: DockviewTabProgress,
   [DOCKVIEW_TAB_LAUNCHPAD_ID]: DockviewTabLaunchpad,
 };
@@ -57,7 +54,12 @@ const mainPanelComponents: AutoLayoutDockviewComponents = {
 };
 
 const initializeMainPanelLayout = (tab: TabName, api: DockviewApi) => {
-  navigationApi.registerContainer(tab, 'main', api, () => {
+  // Always clear stored batch main layout to ensure Launchpad+Viewer tabs are present.
+  // The batch tab was originally created without a Launchpad panel, and stale stored layouts
+  // from before this change would restore with only a Viewer panel (no tab bar).
+  navigationApi._app?.storage.delete(`${tab}${navigationApi.KEY_SEPARATOR}container${navigationApi.KEY_SEPARATOR}main`);
+
+  const initialize = () => {
     const launchpad = api.addPanel<DockviewPanelParameters>({
       id: LAUNCHPAD_PANEL_ID,
       component: LAUNCHPAD_PANEL_ID,
@@ -87,7 +89,33 @@ const initializeMainPanelLayout = (tab: TabName, api: DockviewApi) => {
     });
 
     launchpad.api.setActive();
+  };
+
+  // Force fresh init — do NOT restore from storage for this container
+  initialize();
+
+  // Register panels for navigation tracking
+  for (const panel of api.panels) {
+    navigationApi._registerPanel(tab, panel.id, panel);
+  }
+
+  // Set up dockview active panel tracking
+  navigationApi._currentActiveDockviewPanel.set(tab, api.activePanel?.id ?? null);
+  navigationApi._prevActiveDockviewPanel.set(tab, null);
+  navigationApi._setFocusedRegionFromPanel(tab, api.activePanel);
+  const { dispose } = api.onDidActivePanelChange((panel) => {
+    const previousPanelId = navigationApi._currentActiveDockviewPanel.get(tab);
+    navigationApi._prevActiveDockviewPanel.set(tab, previousPanelId ?? null);
+    navigationApi._currentActiveDockviewPanel.set(tab, panel?.id ?? null);
+    navigationApi._setFocusedRegionFromPanel(tab, panel);
   });
+  navigationApi._addDisposeForTab(tab, dispose);
+
+  // Save the fresh layout to storage
+  navigationApi._app?.storage.set(
+    `${tab}${navigationApi.KEY_SEPARATOR}container${navigationApi.KEY_SEPARATOR}main`,
+    api.toJSON()
+  );
 };
 
 const MainPanel = memo(() => {
@@ -99,6 +127,7 @@ const MainPanel = memo(() => {
     },
     [tab]
   );
+
   return (
     <>
       <DockviewReact
@@ -111,7 +140,7 @@ const MainPanel = memo(() => {
         onReady={onReady}
         theme={dockviewTheme}
       />
-      <FloatingLeftPanelButtons />
+      <FloatingBatchLeftPanelButtons />
       <FloatingRightPanelButtons />
       <PanelHotkeysLogical />
     </>

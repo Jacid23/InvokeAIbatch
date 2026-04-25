@@ -21,7 +21,7 @@ export const useRecallRemix = (imageDTO: ImageDTO) => {
       return false;
     }
 
-    if (tab !== 'canvas' && tab !== 'generate') {
+    if (tab !== 'canvas' && tab !== 'generate' && tab !== 'batch') {
       return false;
     }
 

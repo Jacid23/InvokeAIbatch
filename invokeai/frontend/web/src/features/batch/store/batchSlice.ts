@@ -247,7 +247,6 @@ const slice = createSlice({
     batchShowThumbnailsToggled: (state) => {
       state.showThumbnails = !state.showThumbnails;
     },
-
     // ── Presets ────────────────────────────
     batchPresetSaved: {
       reducer: (state, action: PayloadAction<BatchPreset>) => {

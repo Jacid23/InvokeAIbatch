@@ -8,7 +8,7 @@ import type { ImageDTO } from 'services/api/types';
 
 import { useClearStylePresetWithToast } from './useClearStylePresetWithToast';
 
-const ALLOWED_TABS: TabName[] = ['canvas', 'generate', 'upscaling'];
+const ALLOWED_TABS: TabName[] = ['canvas', 'generate', 'upscaling', 'batch'];
 
 export const useRecallPrompts = (imageDTO: ImageDTO) => {
   const store = useAppStore();

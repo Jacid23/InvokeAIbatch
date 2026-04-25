@@ -11,7 +11,7 @@ export const useRecallDimensions = (imageDTO: ImageDTO) => {
   const isStaging = useCanvasIsStaging();
 
   const isEnabled = useMemo(() => {
-    if (tab !== 'canvas' && tab !== 'generate') {
+    if (tab !== 'canvas' && tab !== 'generate' && tab !== 'batch') {
       return false;
     }
 

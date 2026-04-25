@@ -9,7 +9,7 @@ def get_thumbnail_name(image_name: str) -> str:
     return thumbnail_name
 
 
-def make_thumbnail(image: Image.Image, size: int = 256) -> Image.Image:
+def make_thumbnail(image: Image.Image, size: int = 512) -> Image.Image:
     """Makes a thumbnail from a PIL Image"""
     thumbnail = image.copy()
     thumbnail.thumbnail(size=(size, size))

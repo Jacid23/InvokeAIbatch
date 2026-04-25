@@ -1,7 +1,6 @@
 import {
   Card,
   CardBody,
-  CardHeader,
   CompositeNumberInput,
   CompositeSlider,
   Flex,
@@ -19,6 +18,7 @@ import {
   loraWeightChanged,
 } from 'features/controlLayers/store/lorasSlice';
 import type { LoRA } from 'features/controlLayers/store/types';
+import StylePresetImage from 'features/stylePresets/components/StylePresetImage';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { PiTrashSimpleBold } from 'react-icons/pi';
@@ -59,51 +59,63 @@ const LoRAContent = memo(({ lora }: { lora: LoRA }) => {
   }, [dispatch, lora.id]);
 
   return (
-    <Card variant="lora">
-      <CardHeader>
-        <Flex alignItems="center" justifyContent="space-between" width="100%" gap={2}>
-          <Text noOfLines={1} wordBreak="break-all" color={lora.isEnabled ? 'base.200' : 'base.500'}>
-            {loraConfig?.name ?? lora.model.key.substring(0, 8)}
-          </Text>
-          <Flex alignItems="center" gap={2}>
-            <Switch size="sm" onChange={handleSetLoraToggle} isChecked={lora.isEnabled} />
-            <IconButton
-              aria-label={t('lora.removeLoRA')}
-              variant="ghost"
-              size="sm"
-              onClick={handleRemoveLora}
-              icon={<PiTrashSimpleBold />}
-            />
+    <Card variant="lora" opacity={lora.isEnabled ? 1 : 0.7}>
+      <CardBody>
+        <Flex flexDir="column" gap={1} w="full">
+          {/* Row 1: Thumbnail + Name */}
+          <Flex alignItems="flex-start" gap={2} w="full">
+            <StylePresetImage presetImageUrl={loraConfig?.cover_image ?? null} imageWidth={24} />
+            <Text
+              noOfLines={1}
+              wordBreak="break-all"
+              color={lora.isEnabled ? 'base.200' : 'base.500'}
+              fontWeight="semibold"
+              flexGrow={1}
+              minW={0}
+              pt={0.5}
+            >
+              {loraConfig?.name ?? lora.model.key.substring(0, 8)}
+            </Text>
           </Flex>
+          {/* Row 2: Slider + Number + Toggle + Trash */}
+          <InformationalPopover feature="loraWeight">
+            <Flex alignItems="center" gap={2} w="full">
+              <CompositeSlider
+                value={lora.weight}
+                onChange={handleChange}
+                min={DEFAULT_LORA_WEIGHT_CONFIG.sliderMin}
+                max={DEFAULT_LORA_WEIGHT_CONFIG.sliderMax}
+                step={DEFAULT_LORA_WEIGHT_CONFIG.coarseStep}
+                fineStep={DEFAULT_LORA_WEIGHT_CONFIG.fineStep}
+                marks={MARKS}
+                defaultValue={DEFAULT_LORA_WEIGHT_CONFIG.initial}
+                isDisabled={!lora.isEnabled}
+              />
+              <CompositeNumberInput
+                value={lora.weight}
+                onChange={handleChange}
+                min={DEFAULT_LORA_WEIGHT_CONFIG.numberInputMin}
+                max={DEFAULT_LORA_WEIGHT_CONFIG.numberInputMax}
+                step={DEFAULT_LORA_WEIGHT_CONFIG.coarseStep}
+                fineStep={DEFAULT_LORA_WEIGHT_CONFIG.fineStep}
+                w={20}
+                flexShrink={0}
+                defaultValue={DEFAULT_LORA_WEIGHT_CONFIG.initial}
+                isDisabled={!lora.isEnabled}
+              />
+              <Switch size="sm" isChecked={lora.isEnabled} onChange={handleSetLoraToggle} flexShrink={0} />
+              <IconButton
+                aria-label="Remove LoRA"
+                variant="ghost"
+                size="sm"
+                onClick={handleRemoveLora}
+                icon={<PiTrashSimpleBold />}
+                flexShrink={0}
+              />
+            </Flex>
+          </InformationalPopover>
         </Flex>
-      </CardHeader>
-      <InformationalPopover feature="loraWeight">
-        <CardBody>
-          <CompositeSlider
-            value={lora.weight}
-            onChange={handleChange}
-            min={DEFAULT_LORA_WEIGHT_CONFIG.sliderMin}
-            max={DEFAULT_LORA_WEIGHT_CONFIG.sliderMax}
-            step={DEFAULT_LORA_WEIGHT_CONFIG.coarseStep}
-            fineStep={DEFAULT_LORA_WEIGHT_CONFIG.fineStep}
-            marks={MARKS}
-            defaultValue={DEFAULT_LORA_WEIGHT_CONFIG.initial}
-            isDisabled={!lora.isEnabled}
-          />
-          <CompositeNumberInput
-            value={lora.weight}
-            onChange={handleChange}
-            min={DEFAULT_LORA_WEIGHT_CONFIG.numberInputMin}
-            max={DEFAULT_LORA_WEIGHT_CONFIG.numberInputMax}
-            step={DEFAULT_LORA_WEIGHT_CONFIG.coarseStep}
-            fineStep={DEFAULT_LORA_WEIGHT_CONFIG.fineStep}
-            w={20}
-            flexShrink={0}
-            defaultValue={DEFAULT_LORA_WEIGHT_CONFIG.initial}
-            isDisabled={!lora.isEnabled}
-          />
-        </CardBody>
-      </InformationalPopover>
+      </CardBody>
     </Card>
   );
 });
