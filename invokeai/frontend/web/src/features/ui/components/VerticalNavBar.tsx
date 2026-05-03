@@ -1,5 +1,6 @@
 import { Divider, Flex, IconButton, Spacer, Tooltip } from '@invoke-ai/ui-library';
 import { UserMenu } from 'features/auth/components/UserMenu';
+import { useIsCustomNodesEnabled } from 'features/customNodes/useIsCustomNodesEnabled';
 import InvokeAILogoComponent from 'features/system/components/InvokeAILogoComponent';
 import SettingsMenu from 'features/system/components/SettingsModal/SettingsMenu';
 import StatusIndicator from 'features/system/components/StatusIndicator';
@@ -9,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import {
   PiBoundingBoxBold,
   PiBrowserBold,
+  PiCircuitryBold,
   PiCubeBold,
   PiFlaskBold,
   PiFlowArrowBold,
@@ -35,6 +37,7 @@ DuplicateTabButton.displayName = 'DuplicateTabButton';
 
 export const VerticalNavBar = memo(() => {
   const { t } = useTranslation();
+  const { isAllowed: isCustomNodesAllowed } = useIsCustomNodesEnabled();
 
   return (
     <Flex flexDir="column" alignItems="center" py={6} ps={4} pe={2} gap={4} minW={0} flexShrink={0}>
@@ -53,6 +56,9 @@ export const VerticalNavBar = memo(() => {
       <DuplicateTabButton />
       <StatusIndicator />
       <TabButton tab="models" icon={<PiCubeBold />} label={t('ui.tabs.models')} />
+      {isCustomNodesAllowed && (
+        <TabButton tab="customNodes" icon={<PiCircuitryBold />} label={t('ui.tabs.customNodes')} />
+      )}
       <TabButton tab="queue" icon={<PiQueueBold />} label={t('ui.tabs.queue')} />
 
       <Divider />

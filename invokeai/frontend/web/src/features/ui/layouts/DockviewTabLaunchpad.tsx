@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import type { IconType } from 'react-icons';
 import {
   PiBoundingBoxBold,
+  PiCircuitryBold,
   PiCubeBold,
   PiFlaskBold,
   PiFlowArrowBold,
@@ -27,6 +28,7 @@ const TAB_ICONS: Record<TabName, IconType> = {
   workflows: PiFlowArrowBold,
   batch: PiFlaskBold,
   models: PiCubeBold,
+  customNodes: PiCircuitryBold,
   queue: PiQueueBold,
 };
 
