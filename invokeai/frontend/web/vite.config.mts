@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
       visualizer(),
     ],
     build: {
-      chunkSizeWarningLimit: 1500,
+      chunkSizeWarningLimit: 4000,
     },
     server: {
       proxy: {

@@ -20,7 +20,6 @@ import {
 import type { LoRA } from 'features/controlLayers/store/types';
 import StylePresetImage from 'features/stylePresets/components/StylePresetImage';
 import { memo, useCallback, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
 import { PiTrashSimpleBold } from 'react-icons/pi';
 import { useGetModelConfigQuery } from 'services/api/endpoints/models';
 
@@ -39,7 +38,6 @@ export const LoRACard = memo((props: { id: string }) => {
 LoRACard.displayName = 'LoRACard';
 
 const LoRAContent = memo(({ lora }: { lora: LoRA }) => {
-  const { t } = useTranslation();
   const dispatch = useAppDispatch();
   const { data: loraConfig } = useGetModelConfigQuery(lora.model.key);
 
