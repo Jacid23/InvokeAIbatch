@@ -5,18 +5,22 @@ import { InformationalPopover } from 'common/components/InformationalPopover/Inf
 import { selectFluxScheduler, setFluxScheduler } from 'features/controlLayers/store/paramsSlice';
 import { isParameterFluxScheduler } from 'features/parameters/types/parameterSchemas';
 import { memo, useCallback, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
 
 // Flux-specific scheduler options (Flow Matching schedulers)
 const FLUX_SCHEDULER_OPTIONS: ComboboxOption[] = [
   { value: 'euler', label: 'Euler' },
   { value: 'heun', label: 'Heun (2nd order)' },
   { value: 'lcm', label: 'LCM' },
+  { value: 'dpmpp_2m', label: 'DPM++ 2M' },
+  { value: 'dpmpp_2m_sde', label: 'DPM++ 2M SDE' },
+  { value: 'dpmpp_sde', label: 'DPM++ SDE' },
+  { value: 'uni_pc', label: 'UniPC' },
+  { value: 'deis', label: 'DEIS' },
+  { value: 'sa_solver', label: 'SA-Solver PECE' },
 ];
 
 const ParamFluxScheduler = () => {
   const dispatch = useAppDispatch();
-  const { t } = useTranslation();
   const fluxScheduler = useAppSelector(selectFluxScheduler);
 
   const onChange = useCallback<ComboboxOnChange>(
@@ -34,7 +38,7 @@ const ParamFluxScheduler = () => {
   return (
     <FormControl>
       <InformationalPopover feature="paramScheduler">
-        <FormLabel>{t('parameters.scheduler')}</FormLabel>
+        <FormLabel>Sampler</FormLabel>
       </InformationalPopover>
       <Combobox value={value} options={FLUX_SCHEDULER_OPTIONS} onChange={onChange} />
     </FormControl>

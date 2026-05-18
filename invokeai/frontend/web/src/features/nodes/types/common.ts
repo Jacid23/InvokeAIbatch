@@ -66,7 +66,20 @@ export const zSchedulerField = z.enum([
 export type SchedulerField = z.infer<typeof zSchedulerField>;
 
 // Flux-specific scheduler options (Flow Matching schedulers)
-export const zFluxSchedulerField = z.enum(['euler', 'heun', 'lcm']);
+export const zFluxSchedulerField = z.enum([
+  'euler',
+  'heun',
+  'lcm',
+  'dpmpp_2m',
+  'dpmpp_2m_sde',
+  'dpmpp_sde',
+  'uni_pc',
+  'deis',
+  'sa_solver',
+]);
+
+// Flux sigma schedule options (how sigmas are distributed across timesteps)
+export const zFluxSigmaScheduleField = z.enum(['simple', 'normal', 'ddim_uniform', 'karras', 'beta', 'exponential', 'sgm_uniform']);
 
 // Z-Image scheduler options (Flow Matching schedulers)
 // Note: LCM is only supported for Z-Image Turbo, not for Z-Image Base (undistilled)

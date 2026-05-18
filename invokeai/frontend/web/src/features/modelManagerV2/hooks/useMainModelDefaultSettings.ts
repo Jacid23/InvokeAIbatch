@@ -41,6 +41,14 @@ export const useMainModelDefaultSettings = (modelConfig: MainModelConfig) => {
         isEnabled: !isNil(modelConfig?.default_settings?.guidance),
         value: modelConfig?.default_settings?.guidance ?? 4,
       },
+      fluxSampler: {
+        isEnabled: !isNil(modelConfig?.default_settings?.flux_sampler),
+        value: modelConfig?.default_settings?.flux_sampler ?? 'euler',
+      },
+      fluxScheduler: {
+        isEnabled: !isNil(modelConfig?.default_settings?.flux_scheduler),
+        value: modelConfig?.default_settings?.flux_scheduler ?? 'simple',
+      },
     };
   }, [modelConfig]);
 

@@ -25,6 +25,7 @@ import ParamFluxDypeExponent from 'features/parameters/components/Core/ParamFlux
 import ParamFluxDypePreset from 'features/parameters/components/Core/ParamFluxDypePreset';
 import ParamFluxDypeScale from 'features/parameters/components/Core/ParamFluxDypeScale';
 import ParamFluxScheduler from 'features/parameters/components/Core/ParamFluxScheduler';
+import ParamFluxSigmaSchedule from 'features/parameters/components/Core/ParamFluxSigmaSchedule';
 import ParamGuidance from 'features/parameters/components/Core/ParamGuidance';
 import ParamQwenImageShift from 'features/parameters/components/Core/ParamQwenImageShift';
 import ParamScheduler from 'features/parameters/components/Core/ParamScheduler';
@@ -106,6 +107,7 @@ export const GenerationSettingsAccordion = memo(() => {
                   !isQwenImage &&
                   !isAnima && <ParamScheduler />}
                 {!isExternal && (isFLUX || isFlux2) && <ParamFluxScheduler />}
+                {!isExternal && (isFLUX || isFlux2) && <ParamFluxSigmaSchedule />}
                 {!isExternal && isZImage && <ParamZImageScheduler />}
                 {!isExternal && isAnima && <ParamAnimaScheduler />}
                 {modelSupportsSteps && <ParamSteps />}

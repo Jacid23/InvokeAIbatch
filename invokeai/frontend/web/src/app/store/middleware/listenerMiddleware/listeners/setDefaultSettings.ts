@@ -6,6 +6,8 @@ import {
   heightChanged,
   setCfgRescaleMultiplier,
   setCfgScale,
+  setFluxScheduler,
+  setFluxSigmaSchedule,
   setGuidance,
   setScheduler,
   setSteps,
@@ -17,6 +19,8 @@ import { setDefaultSettings } from 'features/parameters/store/actions';
 import {
   isParameterCFGRescaleMultiplier,
   isParameterCFGScale,
+  isParameterFluxScheduler,
+  isParameterFluxSigmaSchedule,
   isParameterGuidance,
   isParameterHeight,
   isParameterPrecision,
@@ -54,7 +58,7 @@ export const addSetDefaultSettingsListener = (startAppListening: AppStartListeni
       }
 
       if (isNonRefinerMainModelConfig(modelConfig) && modelConfig.default_settings) {
-        const { vae, vae_precision, cfg_scale, cfg_rescale_multiplier, steps, scheduler, width, height, guidance } =
+        const { vae, vae_precision, cfg_scale, cfg_rescale_multiplier, steps, scheduler, width, height, guidance, flux_sampler, flux_scheduler } =
           modelConfig.default_settings;
 
         if (vae) {
@@ -113,6 +117,19 @@ export const addSetDefaultSettingsListener = (startAppListening: AppStartListeni
             dispatch(setScheduler(scheduler));
           }
         }
+
+        if (flux_sampler) {
+          if (isParameterFluxScheduler(flux_sampler)) {
+            dispatch(setFluxScheduler(flux_sampler));
+          }
+        }
+
+        if (flux_scheduler) {
+          if (isParameterFluxSigmaSchedule(flux_scheduler)) {
+            dispatch(setFluxSigmaSchedule(flux_scheduler));
+          }
+        }
+
         const setSizeOptions = { updateAspectRatio: true, clamp: true };
 
         const isStaging = buildSelectIsStaging(selectCanvasSessionId(state))(state);

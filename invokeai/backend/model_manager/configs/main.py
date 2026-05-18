@@ -34,6 +34,7 @@ from invokeai.backend.model_manager.taxonomy import (
     ZImageVariantType,
 )
 from invokeai.backend.quantization.gguf.ggml_tensor import GGMLTensor
+from invokeai.backend.flux.schedulers import FLUX_SCHEDULER_NAME_VALUES, FLUX_SIGMA_SCHEDULE_VALUES
 from invokeai.backend.stable_diffusion.schedulers.schedulers import SCHEDULER_NAME_VALUES
 
 DEFAULTS_PRECISION = Literal["fp16", "fp32"]
@@ -43,6 +44,12 @@ class MainModelDefaultSettings(BaseModel):
     vae: str | None = Field(default=None, description="Default VAE for this model (model key)")
     vae_precision: DEFAULTS_PRECISION | None = Field(default=None, description="Default VAE precision for this model")
     scheduler: SCHEDULER_NAME_VALUES | None = Field(default=None, description="Default scheduler for this model")
+    flux_sampler: FLUX_SCHEDULER_NAME_VALUES | None = Field(
+        default=None, description="Default sampler for Flux models (e.g. euler, dpmpp_2m)"
+    )
+    flux_scheduler: FLUX_SIGMA_SCHEDULE_VALUES | None = Field(
+        default=None, description="Default scheduler (sigma schedule) for Flux models (e.g. normal, beta, karras)"
+    )
     steps: int | None = Field(default=None, gt=0, description="Default number of steps for this model")
     cfg_scale: float | None = Field(default=None, ge=1, description="Default CFG Scale for this model")
     cfg_rescale_multiplier: float | None = Field(
@@ -492,6 +499,9 @@ class Main_Checkpoint_FLUX_Config(Checkpoint_Config_Base, Main_Config_Base, Conf
             {
                 "double_blocks.0.img_attn.norm.key_norm.scale",
                 "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale",
+                # Some checkpoints use .weight instead of .scale for RMSNorm layers
+                "double_blocks.0.img_attn.norm.key_norm.weight",
+                "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.weight",
             },
         ):
             raise NotAMatchError("state dict does not look like a FLUX checkpoint")

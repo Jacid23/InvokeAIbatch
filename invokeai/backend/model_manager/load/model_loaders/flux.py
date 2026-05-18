@@ -533,8 +533,15 @@ class FluxCheckpointModel(ModelLoader):
             model = Flux(get_flux_transformers_params(config.variant))
 
         sd = load_file(model_path)
-        if "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale" in sd:
+        # Detect bundle format: some checkpoints use .scale, others use .weight for norm keys
+        if (
+            "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale" in sd
+            or "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.weight" in sd
+        ):
             sd = convert_bundle_to_flux_transformer_checkpoint(sd)
+        # Remove FP8 scaling metadata that some checkpoints include but the Flux model doesn't use.
+        fp8_keys = {"scaled_fp8"}
+        sd = {k: v for k, v in sd.items() if k not in fp8_keys and not k.endswith((".scale_input", ".scale_weight"))}
         new_sd_size = sum([ten.nelement() * torch.bfloat16.itemsize for ten in sd.values()])
         self._ram_cache.make_room(new_sd_size)
         for k in sd.keys():
@@ -626,7 +633,10 @@ class FluxBnbQuantizednf4bCheckpointModel(ModelLoader):
                 model = Flux(get_flux_transformers_params(config.variant))
                 model = quantize_model_nf4(model, modules_to_not_convert=set(), compute_dtype=torch.bfloat16)
             sd = load_file(model_path)
-            if "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale" in sd:
+            if (
+                "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale" in sd
+                or "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.weight" in sd
+            ):
                 sd = convert_bundle_to_flux_transformer_checkpoint(sd)
             model.load_state_dict(sd, assign=True)
         return model

@@ -54,11 +54,24 @@ def denoise(
         is_lcm = scheduler.__class__.__name__ == "FlowMatchLCMScheduler"
         set_timesteps_sig = inspect.signature(scheduler.set_timesteps)
         if not is_lcm and "sigmas" in set_timesteps_sig.parameters:
-            # Scheduler supports custom sigmas - use InvokeAI's time-shifted schedule
+            # Scheduler supports custom sigmas natively (Euler, UniPC)
             scheduler.set_timesteps(sigmas=timesteps, device=img.device)
+        elif not is_lcm:
+            # Scheduler doesn't accept sigmas= (DPM++ 2M, DPM++ SDE, DEIS, Heun, SA-Solver, etc.)
+            # Initialize with num_inference_steps first, then override sigmas/timesteps
+            num_inference_steps = len(timesteps) - 1
+            scheduler.set_timesteps(num_inference_steps=num_inference_steps, device=img.device)
+            # Override the scheduler's sigmas and timesteps with our custom schedule
+            # Note: Some schedulers (DEIS, SA-Solver) use np.log() internally which requires
+            # CPU tensors. Keep sigmas/timesteps on CPU — scheduler.step() handles device transfer.
+            custom_sigmas = torch.tensor(timesteps, dtype=torch.float32, device="cpu")
+            scheduler.sigmas = custom_sigmas
+            # Convert sigmas [0,1] to timesteps [0, num_train_timesteps] for the scheduler
+            scheduler.timesteps = (custom_sigmas[:-1] * scheduler.config.num_train_timesteps).to(
+                dtype=torch.float32, device="cpu"
+            )
         else:
-            # LCM or scheduler doesn't support custom sigmas - use num_inference_steps
-            # The schedule will be computed by the scheduler itself
+            # LCM has its own sigma schedule - use num_inference_steps
             num_inference_steps = len(timesteps) - 1
             scheduler.set_timesteps(num_inference_steps=num_inference_steps, device=img.device)
 

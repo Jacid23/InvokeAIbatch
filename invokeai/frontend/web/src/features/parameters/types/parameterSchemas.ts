@@ -8,6 +8,7 @@ import {
   zFluxDypePresetField,
   zFluxDypeScaleField,
   zFluxSchedulerField,
+  zFluxSigmaScheduleField,
   zModelIdentifierField,
   zSchedulerField,
   zZImageSchedulerField,
@@ -74,6 +75,11 @@ export type ParameterScheduler = z.infer<typeof zParameterScheduler>;
 // #region Flux Scheduler
 export const [zParameterFluxScheduler, isParameterFluxScheduler] = buildParameter(zFluxSchedulerField);
 export type ParameterFluxScheduler = z.infer<typeof zParameterFluxScheduler>;
+// #endregion
+
+// #region Flux Sigma Schedule
+export const [zParameterFluxSigmaSchedule, isParameterFluxSigmaSchedule] = buildParameter(zFluxSigmaScheduleField);
+export type ParameterFluxSigmaSchedule = z.infer<typeof zParameterFluxSigmaSchedule>;
 // #endregion
 
 // #region Z-Image Scheduler

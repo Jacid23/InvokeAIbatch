@@ -32,6 +32,8 @@ import type {
   ParameterCLIPLEmbedModel,
   ParameterControlLoRAModel,
   ParameterFluxDypePreset,
+  ParameterFluxScheduler,
+  ParameterFluxSigmaSchedule,
   ParameterGuidance,
   ParameterModel,
   ParameterNegativePrompt,
@@ -74,8 +76,11 @@ const slice = createSlice({
     setScheduler: (state, action: PayloadAction<ParameterScheduler>) => {
       state.scheduler = action.payload;
     },
-    setFluxScheduler: (state, action: PayloadAction<'euler' | 'heun' | 'lcm'>) => {
+    setFluxScheduler: (state, action: PayloadAction<ParameterFluxScheduler>) => {
       state.fluxScheduler = action.payload;
+    },
+    setFluxSigmaSchedule: (state, action: PayloadAction<ParameterFluxSigmaSchedule>) => {
+      state.fluxSigmaSchedule = action.payload;
     },
     setFluxDypePreset: (state, action: PayloadAction<ParameterFluxDypePreset>) => {
       state.fluxDypePreset = action.payload;
@@ -598,6 +603,7 @@ export const {
   setGuidance,
   setScheduler,
   setFluxScheduler,
+  setFluxSigmaSchedule,
   setFluxDypePreset,
   setFluxDypeScale,
   setFluxDypeExponent,
@@ -847,6 +853,7 @@ export const selectSeedControl = createSelector(selectModelConfig, (modelConfig)
 });
 export const selectScheduler = createParamsSelector((params) => params.scheduler);
 export const selectFluxScheduler = createParamsSelector((params) => params.fluxScheduler);
+export const selectFluxSigmaSchedule = createParamsSelector((params) => params.fluxSigmaSchedule);
 export const selectFluxDypePreset = createParamsSelector((params) => params.fluxDypePreset);
 export const selectFluxDypeScale = createParamsSelector((params) => params.fluxDypeScale);
 export const selectFluxDypeExponent = createParamsSelector((params) => params.fluxDypeExponent);

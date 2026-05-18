@@ -56,6 +56,7 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
     guidance: baseGuidance,
     steps,
     fluxScheduler,
+    fluxSigmaSchedule,
     fluxDypePreset,
     fluxDypeScale,
     fluxDypeExponent,
@@ -181,6 +182,7 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
       id: getPrefixedId('flux2_denoise'),
       num_steps: steps,
       scheduler: fluxScheduler,
+      sigma_schedule: fluxSigmaSchedule,
     });
 
     // Klein: Connect Qwen3 encoder outputs
@@ -215,6 +217,7 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
       guidance,
       num_steps: steps,
       scheduler: fluxScheduler,
+      sigma_schedule: fluxSigmaSchedule,
       dype_preset: fluxDypePreset,
       // Only send custom scale/exponent when DyPE is not off
       dype_scale: fluxDypeScale,
@@ -250,6 +253,7 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
       model: Graph.getModelMetadataField(model),
       steps,
       scheduler: fluxScheduler,
+      sigma_schedule: fluxSigmaSchedule,
     };
     if (kleinVaeModel) {
       flux2Metadata.vae = kleinVaeModel;
@@ -264,6 +268,7 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
       model: Graph.getModelMetadataField(model),
       steps,
       scheduler: fluxScheduler,
+      sigma_schedule: fluxSigmaSchedule,
       dype_preset: fluxDypePreset,
       dype_scale: fluxDypePreset !== 'off' ? fluxDypeScale : undefined,
       dype_exponent: fluxDypePreset !== 'off' ? fluxDypeExponent : undefined,

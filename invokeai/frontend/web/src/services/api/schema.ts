@@ -3079,7 +3079,7 @@ export type components = {
              * @default euler
              * @enum {string}
              */
-            scheduler?: "euler" | "heun" | "lcm";
+            scheduler?: "euler" | "heun" | "lcm" | "dpmpp_2m" | "dpmpp_2m_sde" | "dpmpp_sde" | "uni_pc" | "deis";
             /**
              * type
              * @default anima_denoise
@@ -10143,7 +10143,14 @@ export type components = {
              * @default euler
              * @enum {string}
              */
-            scheduler?: "euler" | "heun" | "lcm";
+            scheduler?: "euler" | "heun" | "lcm" | "dpmpp_2m" | "dpmpp_2m_sde" | "dpmpp_sde" | "uni_pc" | "deis" | "sa_solver";
+            /**
+             * Sigma Schedule
+             * @description Sigma schedule type for noise generation.
+             * @default simple
+             * @enum {string}
+             */
+            sigma_schedule?: "simple" | "normal" | "ddim_uniform" | "karras" | "beta" | "exponential" | "sgm_uniform";
             /**
              * Seed
              * @description Randomness seed for reproducibility.
@@ -10904,7 +10911,14 @@ export type components = {
              * @default euler
              * @enum {string}
              */
-            scheduler?: "euler" | "heun" | "lcm";
+            scheduler?: "euler" | "heun" | "lcm" | "dpmpp_2m" | "dpmpp_2m_sde" | "dpmpp_sde" | "uni_pc" | "deis" | "sa_solver";
+            /**
+             * Sigma Schedule
+             * @description Sigma schedule type for noise generation.
+             * @default simple
+             * @enum {string}
+             */
+            sigma_schedule?: "simple" | "normal" | "ddim_uniform" | "karras" | "beta" | "exponential" | "sgm_uniform";
             /**
              * Guidance
              * @description The guidance strength. Higher values adhere more strictly to the prompt, and will produce less diverse images. FLUX dev only, ignored for schnell.
@@ -11098,7 +11112,14 @@ export type components = {
              * @default euler
              * @enum {string}
              */
-            scheduler?: "euler" | "heun" | "lcm";
+            scheduler?: "euler" | "heun" | "lcm" | "dpmpp_2m" | "dpmpp_2m_sde" | "dpmpp_sde" | "uni_pc" | "deis" | "sa_solver";
+            /**
+             * Sigma Schedule
+             * @description Sigma schedule type for noise generation.
+             * @default simple
+             * @enum {string}
+             */
+            sigma_schedule?: "simple" | "normal" | "ddim_uniform" | "karras" | "beta" | "exponential" | "sgm_uniform";
             /**
              * Guidance
              * @description The guidance strength. Higher values adhere more strictly to the prompt, and will produce less diverse images. FLUX dev only, ignored for schnell.
@@ -19341,6 +19362,16 @@ export type components = {
              * @description Whether this model should run on CPU only
              */
             cpu_only?: boolean | null;
+            /**
+             * Flux Sampler
+             * @description Default sampler for Flux models (e.g. euler, dpmpp_2m)
+             */
+            flux_sampler?: ("euler" | "heun" | "lcm" | "dpmpp_2m" | "dpmpp_2m_sde" | "dpmpp_sde" | "uni_pc" | "deis" | "sa_solver") | null;
+            /**
+             * Flux Scheduler
+             * @description Default scheduler (sigma schedule) for Flux models (e.g. normal, beta, karras)
+             */
+            flux_scheduler?: ("simple" | "normal" | "ddim_uniform" | "karras" | "beta" | "exponential" | "sgm_uniform") | null;
         };
         /**
          * Main Model - SD1.5, SD2
@@ -31602,7 +31633,7 @@ export type components = {
              * @default euler
              * @enum {string}
              */
-            scheduler?: "euler" | "heun" | "lcm";
+            scheduler?: "euler" | "heun" | "lcm" | "dpmpp_2m" | "dpmpp_2m_sde" | "dpmpp_sde" | "uni_pc" | "deis";
             /**
              * type
              * @default z_image_denoise
@@ -31735,7 +31766,7 @@ export type components = {
              * @default euler
              * @enum {string}
              */
-            scheduler?: "euler" | "heun" | "lcm";
+            scheduler?: "euler" | "heun" | "lcm" | "dpmpp_2m" | "dpmpp_2m_sde" | "dpmpp_sde" | "uni_pc" | "deis";
             /**
              * type
              * @default z_image_denoise_meta

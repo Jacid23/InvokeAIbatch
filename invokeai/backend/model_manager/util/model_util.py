@@ -177,6 +177,10 @@ def convert_bundle_to_flux_transformer_checkpoint(
             # support limitations at inference time
             v = v.to(dtype=torch.bfloat16)
         new_key = k.replace("model.diffusion_model.", "")
+        # Some checkpoints use .weight instead of .scale for RMSNorm layers — rename to match model
+        if new_key.endswith((".query_norm.weight", ".key_norm.weight")):
+            new_key = new_key[:-7] + ".scale"  # replace trailing ".weight" with ".scale"
+            v = v.to(dtype=torch.bfloat16)
         original_state_dict[new_key] = v
         keys_to_remove.append(k)
 

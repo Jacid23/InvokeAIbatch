@@ -48,13 +48,21 @@ from invokeai.backend.flux.ip_adapter.xlabs_ip_adapter_flux import XlabsIpAdapte
 from invokeai.backend.flux.model import Flux
 from invokeai.backend.flux.sampling_utils import (
     clip_timestep_schedule_fractional,
+    generate_flow_sigmas,
     generate_img_ids,
     get_noise,
     get_schedule,
     pack,
     unpack,
 )
-from invokeai.backend.flux.schedulers import FLUX_SCHEDULER_LABELS, FLUX_SCHEDULER_MAP, FLUX_SCHEDULER_NAME_VALUES
+from invokeai.backend.flux.schedulers import (
+    FLUX_SCHEDULER_FACTORY,
+    FLUX_SCHEDULER_LABELS,
+    FLUX_SCHEDULER_MAP,
+    FLUX_SCHEDULER_NAME_VALUES,
+    FLUX_SIGMA_SCHEDULE_LABELS,
+    FLUX_SIGMA_SCHEDULE_VALUES,
+)
 from invokeai.backend.flux.text_conditioning import FluxReduxConditioning, FluxTextConditioning
 from invokeai.backend.model_manager.taxonomy import BaseModelType, FluxVariantType, ModelFormat, ModelType
 from invokeai.backend.patches.layer_patcher import LayerPatcher
@@ -71,7 +79,7 @@ from invokeai.backend.util.devices import TorchDevice
     title="FLUX Denoise",
     tags=["image", "flux"],
     category="latents",
-    version="4.5.1",
+    version="4.6.0",
 )
 class FluxDenoiseInvocation(BaseInvocation):
     """Run denoising process with a FLUX transformer model."""
@@ -145,6 +153,13 @@ class FluxDenoiseInvocation(BaseInvocation):
         description="Scheduler (sampler) for the denoising process. 'euler' is fast and standard. "
         "'heun' is 2nd-order (better quality, 2x slower). 'lcm' is optimized for few steps.",
         ui_choice_labels=FLUX_SCHEDULER_LABELS,
+    )
+    sigma_schedule: FLUX_SIGMA_SCHEDULE_VALUES = InputField(
+        default="simple",
+        description="Sigma schedule controls the distribution of noise levels across steps. "
+        "'simple' is linear. 'karras' and 'beta' concentrate steps at certain noise levels. "
+        "Match this to the model's recommended schedule for best results.",
+        ui_choice_labels=FLUX_SIGMA_SCHEDULE_LABELS,
     )
     guidance: float = InputField(
         default=4.0,
@@ -289,9 +304,14 @@ class FluxDenoiseInvocation(BaseInvocation):
 
         # Create scheduler if not using default euler
         scheduler = None
-        if self.scheduler in FLUX_SCHEDULER_MAP:
-            scheduler_class = FLUX_SCHEDULER_MAP[self.scheduler]
-            scheduler = scheduler_class(num_train_timesteps=1000)
+        if self.scheduler in FLUX_SCHEDULER_FACTORY:
+            scheduler = FLUX_SCHEDULER_FACTORY[self.scheduler](num_train_timesteps=1000)
+        elif self.scheduler in FLUX_SCHEDULER_MAP:
+            scheduler = FLUX_SCHEDULER_MAP[self.scheduler](num_train_timesteps=1000)
+
+        # If using a non-default sigma schedule, generate custom sigmas and override the timestep schedule
+        if self.sigma_schedule != "simple":
+            timesteps = generate_flow_sigmas(self.num_steps, self.sigma_schedule)
 
         # Clip the timesteps schedule based on denoising_start and denoising_end.
         timesteps = clip_timestep_schedule_fractional(timesteps, self.denoising_start, self.denoising_end)

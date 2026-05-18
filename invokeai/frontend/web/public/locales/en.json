@@ -1027,6 +1027,7 @@
         "recallParameters": "Recall Parameters",
         "recallParameter": "Recall {{label}}",
         "scheduler": "Scheduler",
+        "sigmaSchedule": "Sigma Schedule",
         "seamlessXAxis": "Seamless X Axis",
         "seamlessYAxis": "Seamless Y Axis",
         "seedVarianceEnabled": "Seed Variance Enabled",

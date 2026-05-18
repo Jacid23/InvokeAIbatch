@@ -1064,8 +1064,14 @@ class ModelInstallService(ModelInstallServiceBase):
 
         info = info or self._probe(model_path, config)
 
-        # Apply LoRA metadata if applicable
         model_images_path = self.app_config.models_path / "model_images"
+
+        # Process preview image for all model types
+        from invokeai.backend.model_manager.util.lora_metadata_extractor import _process_preview_image
+
+        _process_preview_image(model_path.resolve().stem, model_path.resolve().parent, info.key, model_images_path)
+
+        # Apply LoRA-specific metadata (description, trigger phrases)
         apply_lora_metadata(info, model_path.resolve(), model_images_path)
 
         model_path = model_path.resolve()

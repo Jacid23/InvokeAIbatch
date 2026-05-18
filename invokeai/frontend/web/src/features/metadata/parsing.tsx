@@ -34,6 +34,7 @@ import {
   setFluxDypePreset,
   setFluxDypeScale,
   setFluxScheduler,
+  setFluxSigmaSchedule,
   setGuidance,
   setImg2imgStrength,
   setRefinerCFGScale,
@@ -91,6 +92,8 @@ import type {
   ParameterWidth,
 } from 'features/parameters/types/parameterSchemas';
 import {
+  isParameterFluxScheduler,
+  isParameterFluxSigmaSchedule,
   zLoRAWeight,
   zParameterCFGRescaleMultiplier,
   zParameterCFGScale,
@@ -484,8 +487,8 @@ const Scheduler: SingleMetadataHandler<ParameterScheduler> = {
     // Dispatch to the appropriate scheduler based on the current model base
     const base = selectBase(store.getState());
     if (base === 'flux' || base === 'flux2') {
-      // Flux and Flux2 (Klein) only support euler, heun, lcm
-      if (value === 'euler' || value === 'heun' || value === 'lcm') {
+      // Flux and Flux2 (Klein) support expanded scheduler list
+      if (isParameterFluxScheduler(value)) {
         store.dispatch(setFluxScheduler(value));
       }
     } else if (base === 'z-image') {
@@ -508,6 +511,28 @@ const Scheduler: SingleMetadataHandler<ParameterScheduler> = {
   ValueComponent: ({ value }: SingleMetadataValueProps<ParameterScheduler>) => <MetadataPrimitiveValue value={value} />,
 };
 //#endregion Scheduler
+
+//#region FluxSigmaSchedule
+const FluxSigmaSchedule: SingleMetadataHandler<string> = {
+  [SingleMetadataKey]: true,
+  type: 'FluxSigmaSchedule',
+  parse: (metadata, _store) => {
+    const raw = getProperty(metadata, 'sigma_schedule');
+    if (typeof raw !== 'string') {
+      throw new Error('sigma_schedule is not a string');
+    }
+    return Promise.resolve(raw);
+  },
+  recall: (value, store) => {
+    if (isParameterFluxSigmaSchedule(value)) {
+      store.dispatch(setFluxSigmaSchedule(value));
+    }
+  },
+  i18nKey: 'metadata.sigmaSchedule',
+  LabelComponent: MetadataLabel,
+  ValueComponent: ({ value }: SingleMetadataValueProps<string>) => <MetadataPrimitiveValue value={value} />,
+};
+//#endregion FluxSigmaSchedule
 
 //#region Width
 const Width: SingleMetadataHandler<ParameterWidth> = {
@@ -1513,6 +1538,7 @@ export const ImageMetadataHandlers = {
   MainModel,
   // Scheduler must be after MainModel so that base-dependent logic (z-image scheduler) works correctly
   Scheduler,
+  FluxSigmaSchedule,
   VAEModel,
   Qwen3EncoderModel,
   ZImageVAEModel,

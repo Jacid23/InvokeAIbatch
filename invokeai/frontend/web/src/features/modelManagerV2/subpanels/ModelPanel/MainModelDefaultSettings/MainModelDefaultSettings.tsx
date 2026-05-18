@@ -5,7 +5,7 @@ import { useMainModelDefaultSettings } from 'features/modelManagerV2/hooks/useMa
 import { selectSelectedModelKey } from 'features/modelManagerV2/store/modelManagerV2Slice';
 import { DefaultHeight } from 'features/modelManagerV2/subpanels/ModelPanel/MainModelDefaultSettings/DefaultHeight';
 import { DefaultWidth } from 'features/modelManagerV2/subpanels/ModelPanel/MainModelDefaultSettings/DefaultWidth';
-import type { ParameterScheduler } from 'features/parameters/types/parameterSchemas';
+import type { ParameterFluxScheduler, ParameterFluxSigmaSchedule, ParameterScheduler } from 'features/parameters/types/parameterSchemas';
 import { getOptimalDimension } from 'features/parameters/util/optimalDimension';
 import { toast } from 'features/toast/toast';
 import { memo, useCallback, useEffect, useMemo } from 'react';
@@ -18,6 +18,8 @@ import type { MainModelConfig } from 'services/api/types';
 
 import { DefaultCfgRescaleMultiplier } from './DefaultCfgRescaleMultiplier';
 import { DefaultCfgScale } from './DefaultCfgScale';
+import { DefaultFluxSampler } from './DefaultFluxSampler';
+import { DefaultFluxScheduler } from './DefaultFluxScheduler';
 import { DefaultGuidance } from './DefaultGuidance';
 import { DefaultScheduler } from './DefaultScheduler';
 import { DefaultSteps } from './DefaultSteps';
@@ -39,6 +41,8 @@ export type MainModelDefaultSettingsFormData = {
   width: FormField<number>;
   height: FormField<number>;
   guidance: FormField<number>;
+  fluxSampler: FormField<ParameterFluxScheduler>;
+  fluxScheduler: FormField<ParameterFluxSigmaSchedule>;
 };
 
 type Props = {
@@ -85,6 +89,8 @@ export const MainModelDefaultSettings = memo(({ modelConfig }: Props) => {
         width: data.width.isEnabled ? data.width.value : null,
         height: data.height.isEnabled ? data.height.value : null,
         guidance: data.guidance.isEnabled ? data.guidance.value : null,
+        flux_sampler: data.fluxSampler.isEnabled ? data.fluxSampler.value : null,
+        flux_scheduler: data.fluxScheduler.isEnabled ? data.fluxScheduler.value : null,
       };
 
       updateModel({
@@ -136,6 +142,8 @@ export const MainModelDefaultSettings = memo(({ modelConfig }: Props) => {
         {!isFluxFamily && <DefaultVaePrecision control={control} name="vaePrecision" />}
         {!isFluxFamily && <DefaultScheduler control={control} name="scheduler" />}
         <DefaultSteps control={control} name="steps" />
+        {isFluxFamily && <DefaultFluxSampler control={control} name="fluxSampler" />}
+        {isFluxFamily && <DefaultFluxScheduler control={control} name="fluxScheduler" />}
         {isFluxFamily && <DefaultGuidance control={control} name="guidance" />}
         {!isFluxFamily && <DefaultCfgScale control={control} name="cfgScale" />}
         {!isFluxFamily && <DefaultCfgRescaleMultiplier control={control} name="cfgRescaleMultiplier" />}
