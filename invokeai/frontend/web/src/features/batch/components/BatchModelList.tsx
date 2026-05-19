@@ -118,7 +118,7 @@ export const BatchModelList = memo(() => {
         </InformationalPopover>
         <ModelPicker
           pickerId="batch-model-picker"
-          modelConfigs={modelConfigs}
+          modelConfigs={modelConfigs as unknown as AnyModelConfig[]}
           selectedModelConfig={undefined}
           onChange={handleChange}
           grouped

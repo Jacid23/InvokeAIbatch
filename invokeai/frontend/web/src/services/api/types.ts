@@ -200,8 +200,8 @@ export type ExternalApiModelConfig = {
   name: string;
   description: string | null;
   source: string;
-  source_type: string;
-  source_api_response: JsonObject | null;
+  source_type: 'external' | 'path' | 'url' | 'hf_repo_id';
+  source_api_response: string | null;
   cover_image: string | null;
   base: 'external';
   type: 'external_image_generator';
@@ -211,8 +211,9 @@ export type ExternalApiModelConfig = {
   capabilities: ExternalModelCapabilities;
   default_settings?: ExternalApiModelDefaultSettings | null;
   panel_schema?: ExternalModelPanelSchema | null;
+  source_url?: string | null;
   tags?: string[] | null;
-  is_default?: boolean;
+  is_default: boolean;
 };
 export type AnyModelConfig = InternalAnyModelConfig;
 export type AnyModelConfigWithExternal = AnyModelConfig | ExternalApiModelConfig;

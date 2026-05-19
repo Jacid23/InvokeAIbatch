@@ -5,7 +5,11 @@ import { useMainModelDefaultSettings } from 'features/modelManagerV2/hooks/useMa
 import { selectSelectedModelKey } from 'features/modelManagerV2/store/modelManagerV2Slice';
 import { DefaultHeight } from 'features/modelManagerV2/subpanels/ModelPanel/MainModelDefaultSettings/DefaultHeight';
 import { DefaultWidth } from 'features/modelManagerV2/subpanels/ModelPanel/MainModelDefaultSettings/DefaultWidth';
-import type { ParameterFluxScheduler, ParameterFluxSigmaSchedule, ParameterScheduler } from 'features/parameters/types/parameterSchemas';
+import type {
+  ParameterFluxScheduler,
+  ParameterFluxSigmaSchedule,
+  ParameterScheduler,
+} from 'features/parameters/types/parameterSchemas';
 import { getOptimalDimension } from 'features/parameters/util/optimalDimension';
 import { toast } from 'features/toast/toast';
 import { memo, useCallback, useEffect, useMemo } from 'react';
@@ -20,6 +24,7 @@ import { DefaultCfgRescaleMultiplier } from './DefaultCfgRescaleMultiplier';
 import { DefaultCfgScale } from './DefaultCfgScale';
 import { DefaultFluxSampler } from './DefaultFluxSampler';
 import { DefaultFluxScheduler } from './DefaultFluxScheduler';
+import { DefaultFp8Storage } from './DefaultFp8Storage';
 import { DefaultGuidance } from './DefaultGuidance';
 import { DefaultScheduler } from './DefaultScheduler';
 import { DefaultSteps } from './DefaultSteps';
@@ -43,6 +48,7 @@ export type MainModelDefaultSettingsFormData = {
   guidance: FormField<number>;
   fluxSampler: FormField<ParameterFluxScheduler>;
   fluxScheduler: FormField<ParameterFluxSigmaSchedule>;
+  fp8Storage: FormField<boolean>;
 };
 
 type Props = {
@@ -91,6 +97,7 @@ export const MainModelDefaultSettings = memo(({ modelConfig }: Props) => {
         guidance: data.guidance.isEnabled ? data.guidance.value : null,
         flux_sampler: data.fluxSampler.isEnabled ? data.fluxSampler.value : null,
         flux_scheduler: data.fluxScheduler.isEnabled ? data.fluxScheduler.value : null,
+        fp8_storage: data.fp8Storage.isEnabled ? data.fp8Storage.value : null,
       };
 
       updateModel({
@@ -149,6 +156,7 @@ export const MainModelDefaultSettings = memo(({ modelConfig }: Props) => {
         {!isFluxFamily && <DefaultCfgRescaleMultiplier control={control} name="cfgRescaleMultiplier" />}
         <DefaultWidth control={control} optimalDimension={optimalDimension} />
         <DefaultHeight control={control} optimalDimension={optimalDimension} />
+        <DefaultFp8Storage control={control} name="fp8Storage" />
       </SimpleGrid>
     </>
   );

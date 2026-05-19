@@ -58,8 +58,19 @@ export const addSetDefaultSettingsListener = (startAppListening: AppStartListeni
       }
 
       if (isNonRefinerMainModelConfig(modelConfig) && modelConfig.default_settings) {
-        const { vae, vae_precision, cfg_scale, cfg_rescale_multiplier, steps, scheduler, width, height, guidance, flux_sampler, flux_scheduler } =
-          modelConfig.default_settings;
+        const {
+          vae,
+          vae_precision,
+          cfg_scale,
+          cfg_rescale_multiplier,
+          steps,
+          scheduler,
+          width,
+          height,
+          guidance,
+          flux_sampler,
+          flux_scheduler,
+        } = modelConfig.default_settings;
 
         if (vae) {
           // we store this as "default" within default settings

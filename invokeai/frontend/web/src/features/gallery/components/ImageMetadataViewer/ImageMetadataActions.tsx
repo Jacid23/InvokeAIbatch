@@ -41,7 +41,7 @@ export const ImageMetadataActions = memo((props: Props) => {
       <SingleMetadataDatum metadata={metadata} handler={ImageMetadataHandlers.Seed} />
       <SingleMetadataDatum metadata={metadata} handler={ImageMetadataHandlers.Steps} />
       <SingleMetadataDatum metadata={metadata} handler={ImageMetadataHandlers.Scheduler} />
-      <SingleMetadataDatum metadata={metadata} handler={ImageMetadataHandlers.FluxSigmaSchedule} />
+      <SingleMetadataDatum metadata={metadata} handler={ImageMetadataHandlers.SigmaSchedule} />
       <SingleMetadataDatum metadata={metadata} handler={ImageMetadataHandlers.CLIPSkip} />
       <SingleMetadataDatum metadata={metadata} handler={ImageMetadataHandlers.CFGScale} />
       <SingleMetadataDatum metadata={metadata} handler={ImageMetadataHandlers.CFGRescaleMultiplier} />

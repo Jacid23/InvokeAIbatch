@@ -49,6 +49,10 @@ export const useMainModelDefaultSettings = (modelConfig: MainModelConfig) => {
         isEnabled: !isNil(modelConfig?.default_settings?.flux_scheduler),
         value: modelConfig?.default_settings?.flux_scheduler ?? 'simple',
       },
+      fp8Storage: {
+        isEnabled: !isNil(modelConfig?.default_settings?.fp8_storage),
+        value: modelConfig?.default_settings?.fp8_storage ?? false,
+      },
     };
   }, [modelConfig]);
 
