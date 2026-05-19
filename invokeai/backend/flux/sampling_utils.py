@@ -157,26 +157,21 @@ def generate_flow_sigmas(num_steps: int, schedule_type: str = "simple") -> list[
     import numpy as np
 
     if schedule_type == "simple":
-        # Linear spacing from 1 to 0 (ComfyUI "simple")
         sigmas = np.linspace(1.0, 0.0, num_steps + 1)
     elif schedule_type == "normal":
-        # Gaussian CDF schedule (ComfyUI "normal")
         from scipy import stats
 
         x = np.linspace(0, 1, num_steps + 1)
         sigmas = 1.0 - stats.norm.cdf(x, loc=0.5, scale=0.15)
-        # Normalize to start at ~1.0 and end at ~0.0
         sigmas = (sigmas - sigmas[-1]) / (sigmas[0] - sigmas[-1])
     elif schedule_type == "ddim_uniform":
-        # DDIM-style leading uniform spacing
         num_train = 1000
         step_ratio = num_train // num_steps
-        timesteps = np.arange(0, num_steps) * step_ratio + 1  # [1, 51, 101, ..., 951]
-        timesteps = np.flip(timesteps)  # descending [951, 901, ..., 1]
-        sigmas = timesteps / num_train  # [0.951, 0.901, ..., 0.001]
-        sigmas = np.append(sigmas, 0.0)  # terminal sigma
+        timesteps = np.arange(0, num_steps) * step_ratio + 1
+        timesteps = np.flip(timesteps)
+        sigmas = timesteps / num_train
+        sigmas = np.append(sigmas, 0.0)
     elif schedule_type == "karras":
-        # Karras schedule adapted for [0, 1] range
         rho = 7.0
         sigma_min = 0.001
         sigma_max = 1.0
@@ -185,7 +180,6 @@ def generate_flow_sigmas(num_steps: int, schedule_type: str = "simple") -> list[
         max_inv_rho = sigma_max ** (1.0 / rho)
         sigmas = (max_inv_rho + ramp * (min_inv_rho - max_inv_rho)) ** rho
     elif schedule_type == "beta":
-        # Beta distribution CDF schedule
         from scipy import stats
 
         alpha = 0.6
@@ -193,16 +187,13 @@ def generate_flow_sigmas(num_steps: int, schedule_type: str = "simple") -> list[
         x = np.linspace(0, 1, num_steps + 1)
         sigmas = 1.0 - stats.beta.cdf(x, alpha, beta_param)
     elif schedule_type == "exponential":
-        # Exponential decay in [0, 1]
         sigma_min = 0.001
         sigma_max = 1.0
         sigmas = np.exp(np.linspace(math.log(sigma_max), math.log(sigma_min), num_steps + 1))
-        # Append 0.0 as final value and trim to num_steps+1
         sigmas = np.append(sigmas[:-1], 0.0)
     elif schedule_type == "sgm_uniform":
-        # SGM uniform: uniform spacing in timestep space (like ComfyUI's sgm_uniform)
         timesteps = np.linspace(1.0, 0.0, num_steps + 1)
-        sigmas = timesteps  # For flow matching, sigmas == timesteps in [0, 1]
+        sigmas = timesteps
     else:
         raise ValueError(f"Unknown sigma schedule type: {schedule_type}")
 

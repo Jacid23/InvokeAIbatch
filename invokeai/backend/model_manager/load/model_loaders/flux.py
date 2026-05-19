@@ -139,6 +139,7 @@ class Flux2VAEDiffusersLoader(ModelLoader):
             local_files_only=True,
         )
 
+        model = self._apply_fp8_layerwise_casting(model, config, submodel_type)
         return model
 
 
@@ -232,6 +233,7 @@ class Flux2VAELoader(ModelLoader):
             vae_dtype = self._torch_dtype
         model.to(vae_dtype)
 
+        model = self._apply_fp8_layerwise_casting(model, config, submodel_type)
         return model
 
     def _convert_flux2_vae_bfl_to_diffusers(self, sd: dict) -> dict:
@@ -516,7 +518,9 @@ class FluxCheckpointModel(ModelLoader):
 
         match submodel_type:
             case SubModelType.Transformer:
-                return self._load_from_singlefile(config)
+                model = self._load_from_singlefile(config)
+                model = self._apply_fp8_layerwise_casting(model, config, submodel_type)
+                return model
 
         raise ValueError(
             f"Only Transformer submodels are currently supported. Received: {submodel_type.value if submodel_type else 'None'}"
@@ -533,15 +537,8 @@ class FluxCheckpointModel(ModelLoader):
             model = Flux(get_flux_transformers_params(config.variant))
 
         sd = load_file(model_path)
-        # Detect bundle format: some checkpoints use .scale, others use .weight for norm keys
-        if (
-            "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale" in sd
-            or "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.weight" in sd
-        ):
+        if "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale" in sd:
             sd = convert_bundle_to_flux_transformer_checkpoint(sd)
-        # Remove FP8 scaling metadata that some checkpoints include but the Flux model doesn't use.
-        fp8_keys = {"scaled_fp8"}
-        sd = {k: v for k, v in sd.items() if k not in fp8_keys and not k.endswith((".scale_input", ".scale_weight"))}
         new_sd_size = sum([ten.nelement() * torch.bfloat16.itemsize for ten in sd.values()])
         self._ram_cache.make_room(new_sd_size)
         for k in sd.keys():
@@ -633,10 +630,7 @@ class FluxBnbQuantizednf4bCheckpointModel(ModelLoader):
                 model = Flux(get_flux_transformers_params(config.variant))
                 model = quantize_model_nf4(model, modules_to_not_convert=set(), compute_dtype=torch.bfloat16)
             sd = load_file(model_path)
-            if (
-                "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale" in sd
-                or "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.weight" in sd
-            ):
+            if "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale" in sd:
                 sd = convert_bundle_to_flux_transformer_checkpoint(sd)
             model.load_state_dict(sd, assign=True)
         return model
@@ -680,6 +674,7 @@ class FluxDiffusersModel(GenericDiffusersLoader):
             else:
                 raise e
 
+        result = self._apply_fp8_layerwise_casting(result, config, submodel_type)
         return result
 
 
@@ -756,6 +751,7 @@ class Flux2DiffusersModel(GenericDiffusersLoader):
                         if guidance_emb.linear_2.bias is not None:
                             guidance_emb.linear_2.bias.data.zero_()
 
+        result = self._apply_fp8_layerwise_casting(result, config, submodel_type)
         return result
 
 
@@ -773,7 +769,9 @@ class Flux2CheckpointModel(ModelLoader):
 
         match submodel_type:
             case SubModelType.Transformer:
-                return self._load_from_singlefile(config)
+                model = self._load_from_singlefile(config)
+                model = self._apply_fp8_layerwise_casting(model, config, submodel_type)
+                return model
 
         raise ValueError(
             f"Only Transformer submodels are currently supported. Received: {submodel_type.value if submodel_type else 'None'}"
