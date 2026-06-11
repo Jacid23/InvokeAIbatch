@@ -33,14 +33,10 @@ class ImageFileStorageBase(ABC):
         metadata: Optional[str] = None,
         workflow: Optional[str] = None,
         graph: Optional[str] = None,
-<<<<<<< HEAD
-        thumbnail_size: int = 512,
-=======
         thumbnail_size: int = 256,
         image_subfolder: str = "",
->>>>>>> upstream/main
     ) -> None:
-        """Saves an image and a 512x512 WEBP thumbnail. Returns a tuple of the image name, thumbnail name, and created timestamp."""
+        """Saves an image and a 256x256 WEBP thumbnail. Returns a tuple of the image name, thumbnail name, and created timestamp."""
         pass
 
     @abstractmethod

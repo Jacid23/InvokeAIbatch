@@ -53,12 +53,8 @@ class DiskImageFileStorage(ImageFileStorageBase):
         metadata: Optional[str] = None,
         workflow: Optional[str] = None,
         graph: Optional[str] = None,
-<<<<<<< HEAD
-        thumbnail_size: int = 512,
-=======
         thumbnail_size: int = 256,
         image_subfolder: str = "",
->>>>>>> upstream/main
     ) -> None:
         try:
             self.__validate_storage_folders()
