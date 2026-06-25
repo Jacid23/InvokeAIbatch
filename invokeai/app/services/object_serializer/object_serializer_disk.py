@@ -34,17 +34,16 @@ class ObjectSerializerDisk(ObjectSerializerBase[T]):
         super().__init__()
         self._ephemeral = ephemeral
         self._base_output_dir = output_dir
+        self._tempdir: tempfile.TemporaryDirectory[str] | None = None
         self._base_output_dir.mkdir(parents=True, exist_ok=True)
 
         if self._ephemeral:
             # Remove dangling tempdirs that might have been left over from an earlier unplanned shutdown.
             for temp_dir in filter(Path.is_dir, self._base_output_dir.glob("tmp*")):
-                shutil.rmtree(temp_dir)
+                shutil.rmtree(temp_dir, ignore_errors=True)
 
         # Must specify `ignore_cleanup_errors` to avoid fatal errors during cleanup on Windows
-        self._tempdir = (
-            tempfile.TemporaryDirectory(dir=self._base_output_dir, ignore_cleanup_errors=True) if ephemeral else None
-        )
+        self._tempdir = tempfile.TemporaryDirectory(dir=self._base_output_dir, ignore_cleanup_errors=True) if ephemeral else None
         self._output_dir = Path(self._tempdir.name) if self._tempdir else self._base_output_dir
         self.__obj_class_name: Optional[str] = None
 
@@ -82,7 +81,7 @@ class ObjectSerializerDisk(ObjectSerializerBase[T]):
 
     def _tempdir_cleanup(self) -> None:
         """Calls `cleanup` on the temporary directory, if it exists."""
-        if self._tempdir:
+        if getattr(self, "_tempdir", None):
             self._tempdir.cleanup()
 
     def __del__(self) -> None:
