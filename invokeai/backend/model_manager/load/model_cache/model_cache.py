@@ -316,7 +316,13 @@ class ModelCache:
 
     @synchronized
     @record_activity
-    def put(self, key: str, model: AnyModel, execution_device: Optional[torch.device] = None) -> None:
+    def put(
+        self,
+        key: str,
+        model: AnyModel,
+        execution_device: Optional[torch.device] = None,
+        prevent_auto_evict: bool = False,
+    ) -> None:
         """Add a model to the cache.
 
         Args:
@@ -324,6 +330,7 @@ class ModelCache:
             model: The model to cache
             execution_device: Optional device to use for this specific model. If None, uses the cache's default
                 execution_device. Use torch.device("cpu") to force a model to run on CPU.
+            prevent_auto_evict: Whether to keep this model resident during automatic RAM/VRAM pressure cleanup.
         """
         if key in self._cached_models:
             self._logger.debug(
@@ -357,11 +364,12 @@ class ModelCache:
                 model, effective_execution_device, size, keep_ram_copy=self._keep_ram_copy_of_weights
             )
 
-        cache_record = CacheRecord(key=key, cached_model=wrapped_model)
+        cache_record = CacheRecord(key=key, cached_model=wrapped_model, prevent_auto_evict=prevent_auto_evict)
         self._cached_models[key] = cache_record
         self._cache_stack.append(key)
         self._logger.debug(
-            f"Added model {key} (Type: {model.__class__.__name__}, Wrap mode: {wrapped_model.__class__.__name__}, Model size: {size / MB:.2f}MB)"
+            f"Added model {key} (Type: {model.__class__.__name__}, Wrap mode: {wrapped_model.__class__.__name__}, "
+            f"Model size: {size / MB:.2f}MB, Prevent auto-evict: {prevent_auto_evict})"
         )
 
     @synchronized
@@ -753,6 +761,8 @@ class ModelCache:
                 break
             if cache_entry.cached_model.compute_device != execution_device:
                 continue
+            if cache_entry.prevent_auto_evict:
+                continue
             if cache_entry.is_locked:
                 # TODO(ryand): In the future, we may want to partially unload locked models, but this requires careful
                 # handling of model patches (e.g. LoRA).
@@ -835,16 +845,16 @@ class ModelCache:
         self._logger.debug(log)
 
     @synchronized
-    def make_room(self, bytes_needed: int) -> None:
+    def make_room(self, bytes_needed: int, preserve_auto_evict_protected: bool = True) -> None:
         """Make enough room in the cache to accommodate a new model of indicated size.
 
         Note: This function deletes all of the cache's internal references to a model in order to free it. If there are
         external references to the model, there's nothing that the cache can do about it, and those models will not be
         garbage-collected.
         """
-        self._make_room_internal(bytes_needed)
+        self._make_room_internal(bytes_needed, preserve_auto_evict_protected=preserve_auto_evict_protected)
 
-    def _make_room_internal(self, bytes_needed: int) -> None:
+    def _make_room_internal(self, bytes_needed: int, preserve_auto_evict_protected: bool = True) -> None:
         """Internal implementation of make_room(). Assumes the lock is already held."""
         self._logger.debug(f"Making room for {bytes_needed / MB:.2f}MB of RAM.")
         self._log_cache_state(title="Before dropping models:")
@@ -859,7 +869,9 @@ class ModelCache:
             model_key = self._cache_stack[pos]
             cache_entry = self._cached_models[model_key]
 
-            if not cache_entry.is_locked:
+            if preserve_auto_evict_protected and cache_entry.prevent_auto_evict:
+                pos += 1
+            elif not cache_entry.is_locked:
                 ram_bytes_freed += cache_entry.cached_model.total_bytes()
                 self._logger.debug(
                     f"Dropping {model_key} from RAM cache to free {(cache_entry.cached_model.total_bytes() / MB):.2f}MB."

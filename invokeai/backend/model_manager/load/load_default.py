@@ -172,13 +172,16 @@ class ModelLoader(ModelLoaderBase):
         self._ram_cache.make_room(self.get_size_fs(config, Path(config.path), submodel_type))
         loaded_model = self._load_model(config, submodel_type)
 
-        # Determine execution device from model config, considering submodel type
         execution_device = self._get_execution_device(config, submodel_type)
+        prevent_auto_evict = execution_device is not None and self._should_use_second_gpu_for_text_encoder(
+            config, submodel_type
+        )
 
         self._ram_cache.put(
             get_model_cache_key(config.key, submodel_type),
             model=loaded_model,
             execution_device=execution_device,
+            prevent_auto_evict=prevent_auto_evict,
         )
 
         return self._ram_cache.get(key=get_model_cache_key(config.key, submodel_type), stats_name=stats_name)
