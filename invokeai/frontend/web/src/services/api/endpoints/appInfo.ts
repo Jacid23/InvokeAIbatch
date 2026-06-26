@@ -86,6 +86,13 @@ export const appInfoApi = api.injectEndpoints({
       }),
       invalidatesTags: ['AppConfig'],
     }),
+    getTextEncoderCacheStatus: build.mutation<TextEncoderCacheStatusResponse, SyncTextEncoderCacheArg>({
+      query: (body) => ({
+        url: buildAppInfoUrl('text_encoder_cache_status'),
+        method: 'POST',
+        body,
+      }),
+    }),
     getExternalProviderStatuses: build.query<ExternalProviderStatus[], void>({
       query: () => ({
         url: buildAppInfoUrl('external_providers/status'),
@@ -164,6 +171,7 @@ export const {
   useResetExternalProviderConfigMutation,
   useUpdateRuntimeConfigMutation,
   useSyncTextEncoderCacheMutation,
+  useGetTextEncoderCacheStatusMutation,
   useClearInvocationCacheMutation,
   useDisableInvocationCacheMutation,
   useEnableInvocationCacheMutation,
@@ -184,4 +192,23 @@ type SyncTextEncoderCacheArg = {
 type SyncTextEncoderCacheResponse = {
   dropped: number;
   loaded: number;
+  status: TextEncoderCacheStatusResponse;
+};
+
+type TextEncoderCacheStatusResponse = {
+  models: {
+    key: string;
+    name: string;
+    cache_key: string;
+    loaded: boolean;
+    device: string | null;
+    vram_gb: number;
+    total_gb: number;
+  }[];
+  cuda_devices: {
+    index: number;
+    name: string;
+    used_gb: number;
+    total_gb: number;
+  }[];
 };

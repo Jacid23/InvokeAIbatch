@@ -114,9 +114,6 @@ export const AdvancedSettingsAccordion = memo(() => {
             {!isFLUX && !isSD3 && <ParamVAEPrecision />}
           </Flex>
         )}
-        <FormControlGroup>
-          <ParamUseSecondGpuForTextEncoder />
-        </FormControlGroup>
         {!isFLUX && !isFlux2 && !isSD3 && !isZImage && !isQwenImage && !isAnima && (
           <>
             <FormControlGroup formLabelProps={formLabelProps}>
@@ -140,11 +137,13 @@ export const AdvancedSettingsAccordion = memo(() => {
           <FormControlGroup>
             <ParamT5EncoderModelSelect />
             <ParamCLIPEmbedModelSelect />
+            <ParamUseSecondGpuForTextEncoder />
           </FormControlGroup>
         )}
         {isFlux2 && (
           <FormControlGroup>
             <ParamFlux2KleinModelSelect />
+            <ParamUseSecondGpuForTextEncoder />
           </FormControlGroup>
         )}
         {isSD3 && (
@@ -152,22 +151,26 @@ export const AdvancedSettingsAccordion = memo(() => {
             <ParamT5EncoderModelSelect />
             <ParamCLIPLEmbedModelSelect />
             <ParamCLIPGEmbedModelSelect />
+            <ParamUseSecondGpuForTextEncoder />
           </FormControlGroup>
         )}
         {isZImage && (
           <FormControlGroup>
             <ParamZImageQwen3VaeModelSelect />
+            <ParamUseSecondGpuForTextEncoder />
           </FormControlGroup>
         )}
         {isQwenImage && (
           <FormControlGroup>
             <ParamQwenImageComponentSourceSelect />
             <ParamQwenImageQuantization />
+            <ParamUseSecondGpuForTextEncoder />
           </FormControlGroup>
         )}
         {isAnima && (
           <FormControlGroup>
             <ParamAnimaModelSelect />
+            <ParamUseSecondGpuForTextEncoder />
           </FormControlGroup>
         )}
       </Flex>

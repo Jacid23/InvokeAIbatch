@@ -1,4 +1,4 @@
-import { FormControl, FormLabel, Switch } from '@invoke-ai/ui-library';
+import { Flex, FormControl, FormLabel, Switch, Text } from '@invoke-ai/ui-library';
 import { useAppSelector } from 'app/store/storeHooks';
 import { selectCurrentUser } from 'features/auth/store/authSlice';
 import {
@@ -22,10 +22,11 @@ import {
 import type { ModelIdentifierField } from 'features/nodes/types/common';
 import { toast } from 'features/toast/toast';
 import type { ChangeEvent } from 'react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   useGetAppDepsQuery,
   useGetRuntimeConfigQuery,
+  useGetTextEncoderCacheStatusMutation,
   useSyncTextEncoderCacheMutation,
   useUpdateRuntimeConfigMutation,
 } from 'services/api/endpoints/appInfo';
@@ -40,6 +41,25 @@ const isCudaDevice = (device: string | undefined, cudaDeviceCount: number): bool
     return cudaDeviceCount > 0;
   }
   return device === 'cuda' || device.startsWith('cuda:');
+};
+
+type TextEncoderCacheStatus = {
+  models: {
+    loaded: boolean;
+    device: string | null;
+    vram_gb: number;
+    total_gb: number;
+  }[];
+  cuda_devices: {
+    index: number;
+    used_gb: number;
+    total_gb: number;
+  }[];
+};
+
+const getDeviceIndex = (device: string | undefined, fallbackIndex: number): number => {
+  const match = device?.match(/^cuda:(\d+)$/);
+  return match ? Number(match[1]) : fallbackIndex;
 };
 
 const ParamUseSecondGpuForTextEncoder = () => {
@@ -64,6 +84,8 @@ const ParamUseSecondGpuForTextEncoder = () => {
   const { data: runtimeConfig } = useGetRuntimeConfigQuery();
   const [updateRuntimeConfig, { isLoading }] = useUpdateRuntimeConfigMutation();
   const [syncTextEncoderCache, { isLoading: isSyncing }] = useSyncTextEncoderCacheMutation();
+  const [getTextEncoderCacheStatus, { isLoading: isLoadingStatus }] = useGetTextEncoderCacheStatusMutation();
+  const [cacheStatus, setCacheStatus] = useState<TextEncoderCacheStatus | null>(null);
 
   const cudaDeviceCount = useMemo(() => getCudaDeviceCount(appDeps), [appDeps]);
   const isAvailable = runtimeConfig
@@ -107,6 +129,34 @@ const ParamUseSecondGpuForTextEncoder = () => {
     zImageQwen3EncoderModel,
     zImageQwen3SourceModel,
   ]);
+  const targetGpuIndex = useMemo(() => {
+    if (!runtimeConfig || cudaDeviceCount < 2) {
+      return null;
+    }
+    const mainGpuIndex = getDeviceIndex(runtimeConfig.config.device, 0);
+    return [...Array(cudaDeviceCount).keys()].find((index) => index !== mainGpuIndex) ?? null;
+  }, [cudaDeviceCount, runtimeConfig]);
+  const targetGpuStatus =
+    targetGpuIndex === null ? null : cacheStatus?.cuda_devices.find((device) => device.index === targetGpuIndex);
+  const loadedCount = cacheStatus?.models.filter((model) => model.loaded).length ?? 0;
+  const selectedCount = selectedTextEncoderModels.length;
+  const loadedVramGb = cacheStatus?.models.reduce((total, model) => total + model.vram_gb, 0) ?? 0;
+
+  useEffect(() => {
+    if (!runtimeConfig || !isAvailable) {
+      setCacheStatus(null);
+      return;
+    }
+    getTextEncoderCacheStatus({
+      enabled: Boolean(runtimeConfig.config.use_second_gpu_for_text_encoder),
+      text_encoder_models: selectedTextEncoderModels,
+    })
+      .unwrap()
+      .then(setCacheStatus)
+      .catch(() => {
+        setCacheStatus(null);
+      });
+  }, [getTextEncoderCacheStatus, isAvailable, runtimeConfig, selectedTextEncoderModels]);
 
   const onChange = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
@@ -116,7 +166,9 @@ const ParamUseSecondGpuForTextEncoder = () => {
         await syncTextEncoderCache({
           enabled,
           text_encoder_models: selectedTextEncoderModels,
-        }).unwrap();
+        })
+          .unwrap()
+          .then((result) => setCacheStatus(result.status));
       } catch {
         toast({
           id: 'USE_SECOND_GPU_FOR_TEXT_ENCODER_SAVE_FAILED',
@@ -131,7 +183,20 @@ const ParamUseSecondGpuForTextEncoder = () => {
   return (
     <FormControl isDisabled={!runtimeConfig || !canEditRuntimeConfig || !isAvailable || isLoading || isSyncing}>
       <FormLabel m={0} flexGrow={1}>
-        Use Second GPU for Text Encoder
+        <Flex flexDir="column" gap={1}>
+          <Text>Use Second GPU for Text Encoder</Text>
+          <Text fontSize="xs" color="base.300">
+            {isSyncing || isLoadingStatus
+              ? 'Syncing'
+              : selectedCount
+                ? `${loadedCount}/${selectedCount} loaded (${loadedVramGb.toFixed(1)} GB)${
+                    targetGpuStatus
+                      ? ` · GPU ${targetGpuStatus.index} ${targetGpuStatus.used_gb}/${targetGpuStatus.total_gb} GB`
+                      : ''
+                  }`
+                : 'No encoder selected'}
+          </Text>
+        </Flex>
       </FormLabel>
       <Switch size="sm" isChecked={isChecked} onChange={onChange} />
     </FormControl>

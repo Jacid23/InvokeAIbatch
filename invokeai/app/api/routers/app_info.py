@@ -173,6 +173,35 @@ class SyncTextEncoderCacheResponse(BaseModel):
 
     dropped: int = Field(description="Number of cache entries immediately dropped.")
     loaded: int = Field(description="Number of selected encoder entries loaded onto their target device.")
+    status: "TextEncoderCacheStatusResponse" = Field(description="Text encoder cache status after sync.")
+
+
+class TextEncoderCacheModelStatus(BaseModel):
+    """Status for one selected text encoder cache entry."""
+
+    key: str = Field(description="Model key.")
+    name: str = Field(description="Model name.")
+    cache_key: str = Field(description="Resolved cache key.")
+    loaded: bool = Field(description="Whether the cache entry exists and has weights on its execution device.")
+    device: str | None = Field(default=None, description="Execution device for the cache entry.")
+    vram_gb: float = Field(description="Estimated model VRAM resident size in GB.")
+    total_gb: float = Field(description="Estimated model size in GB.")
+
+
+class CudaDeviceStatus(BaseModel):
+    """CUDA device memory status."""
+
+    index: int = Field(description="CUDA device index.")
+    name: str = Field(description="CUDA device name.")
+    used_gb: float = Field(description="Device memory used in GB.")
+    total_gb: float = Field(description="Total device memory in GB.")
+
+
+class TextEncoderCacheStatusResponse(BaseModel):
+    """Selected text encoder cache and CUDA memory status."""
+
+    models: list[TextEncoderCacheModelStatus] = Field(description="Selected text encoder cache statuses.")
+    cuda_devices: list[CudaDeviceStatus] = Field(description="CUDA memory status.")
 
 
 _PREWARM_STANDALONE_TEXT_ENCODER_TYPES = {
@@ -191,6 +220,46 @@ def _normalize_text_encoder_identifier(model: ModelIdentifierField) -> ModelIden
     ):
         return model.model_copy(update={"submodel_type": SubModelType.TextEncoder})
     return model
+
+
+def _get_cuda_device_statuses() -> list[CudaDeviceStatus]:
+    if not torch.cuda.is_available():
+        return []
+    statuses: list[CudaDeviceStatus] = []
+    for device_index in range(torch.cuda.device_count()):
+        device = torch.device("cuda", device_index)
+        free_bytes, total_bytes = torch.cuda.mem_get_info(device)
+        used_bytes = total_bytes - free_bytes
+        statuses.append(
+            CudaDeviceStatus(
+                index=device_index,
+                name=torch.cuda.get_device_name(device),
+                used_gb=round(used_bytes / (1024**3), 2),
+                total_gb=round(total_bytes / (1024**3), 2),
+            )
+        )
+    return statuses
+
+
+def _get_text_encoder_cache_status(models: list[ModelIdentifierField]) -> TextEncoderCacheStatusResponse:
+    ram_cache = ApiDependencies.invoker.services.model_manager.load.ram_cache
+    statuses: list[TextEncoderCacheModelStatus] = []
+    normalized_models = [_normalize_text_encoder_identifier(model) for model in models]
+    for model in normalized_models:
+        cache_key = get_model_cache_key(model.key, model.submodel_type)
+        snapshot = ram_cache.get_cache_entry_snapshot(cache_key)
+        statuses.append(
+            TextEncoderCacheModelStatus(
+                key=model.key,
+                name=model.name,
+                cache_key=cache_key,
+                loaded=snapshot is not None and snapshot.current_vram_bytes > 0,
+                device=snapshot.compute_device if snapshot is not None else None,
+                vram_gb=round((snapshot.current_vram_bytes if snapshot is not None else 0) / (1024**3), 2),
+                total_gb=round((snapshot.total_bytes if snapshot is not None else 0) / (1024**3), 2),
+            )
+        )
+    return TextEncoderCacheStatusResponse(models=statuses, cuda_devices=_get_cuda_device_statuses())
 
 
 @app_router.get(
@@ -216,8 +285,8 @@ async def update_runtime_config(
         update_dict = changes.model_dump(exclude_unset=True)
         config.update_config(update_dict)
         if update_dict.get("use_second_gpu_for_text_encoder") is False:
-            ApiDependencies.invoker.services.model_manager.load.ram_cache.drop_auto_evict_protected(
-                exclude_execution_device=TorchDevice.choose_torch_device()
+            ApiDependencies.invoker.services.model_manager.load.ram_cache.drop_cuda_entries_except(
+                keep_execution_device=TorchDevice.choose_torch_device()
             )
 
         if config.config_file_path.exists():
@@ -249,8 +318,10 @@ async def sync_text_encoder_cache(
         dropped += ram_cache.drop_cache_key(get_model_cache_key(model.key, model.submodel_type))
 
     if not request.enabled:
-        dropped += ram_cache.drop_auto_evict_protected(exclude_execution_device=TorchDevice.choose_torch_device())
-        return SyncTextEncoderCacheResponse(dropped=dropped, loaded=loaded)
+        dropped += ram_cache.drop_cuda_entries_except(keep_execution_device=TorchDevice.choose_torch_device())
+        return SyncTextEncoderCacheResponse(
+            dropped=dropped, loaded=loaded, status=_get_text_encoder_cache_status(request.text_encoder_models)
+        )
 
     for model in normalized_models:
         try:
@@ -262,7 +333,22 @@ async def sync_text_encoder_cache(
         except UnknownModelException:
             raise HTTPException(status_code=404, detail=f"Unknown model: {model.key}")
 
-    return SyncTextEncoderCacheResponse(dropped=dropped, loaded=loaded)
+    return SyncTextEncoderCacheResponse(
+        dropped=dropped, loaded=loaded, status=_get_text_encoder_cache_status(request.text_encoder_models)
+    )
+
+
+@app_router.post(
+    "/text_encoder_cache_status",
+    operation_id="get_text_encoder_cache_status",
+    status_code=200,
+    response_model=TextEncoderCacheStatusResponse,
+)
+async def get_text_encoder_cache_status(
+    _: AdminUserOrDefault,
+    request: SyncTextEncoderCacheRequest = Body(description="Selected text encoder cache status request"),
+) -> TextEncoderCacheStatusResponse:
+    return _get_text_encoder_cache_status(request.text_encoder_models)
 
 
 @app_router.get(

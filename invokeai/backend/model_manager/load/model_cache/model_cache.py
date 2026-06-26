@@ -75,6 +75,7 @@ class CacheEntrySnapshot:
     cache_key: str
     total_bytes: int
     current_vram_bytes: int
+    compute_device: str
 
 
 class CacheMissCallback(Protocol):
@@ -385,6 +386,7 @@ class ModelCache:
                 cache_key=cache_key,
                 total_bytes=total_bytes,
                 current_vram_bytes=current_vram_bytes,
+                compute_device=str(cache_entry.cached_model.compute_device),
             )
 
         return overview
@@ -1007,6 +1009,58 @@ class ModelCache:
             )
 
         return len(dropped)
+
+    @synchronized
+    def drop_cuda_entries_except(self, keep_execution_device: torch.device) -> int:
+        """Drop every cached model on CUDA devices other than the requested one."""
+        keep_execution_device = torch.device(keep_execution_device)
+        dropped: list[CacheRecord] = []
+        bytes_freed = 0
+
+        for entry in list(self._cached_models.values()):
+            compute_device = entry.cached_model.compute_device
+            if compute_device.type != "cuda" or compute_device == keep_execution_device:
+                if compute_device == keep_execution_device:
+                    entry.prevent_auto_evict = False
+                continue
+            if entry.is_locked:
+                entry.is_stale = True
+                entry.prevent_auto_evict = False
+                continue
+
+            bytes_freed += entry.cached_model.total_bytes()
+            self._delete_cache_entry(entry)
+            dropped.append(entry)
+
+        if dropped:
+            if self.stats:
+                self.stats.cleared = len(dropped)
+            snapshot = self._get_cache_snapshot()
+            for cb in self._on_cache_models_cleared_callbacks:
+                cb(
+                    models_cleared=len(dropped),
+                    bytes_requested=0,
+                    bytes_freed=bytes_freed,
+                    cache_snapshot=snapshot,
+                )
+            gc.collect()
+            TorchDevice.empty_cache()
+            self._logger.info(f"Dropped {len(dropped)} non-main CUDA model(s) to free {bytes_freed / MB:.2f}MB.")
+
+        return len(dropped)
+
+    @synchronized
+    def get_cache_entry_snapshot(self, cache_key: str) -> CacheEntrySnapshot | None:
+        """Get a lightweight snapshot for a single cache entry."""
+        entry = self._cached_models.get(cache_key)
+        if entry is None:
+            return None
+        return CacheEntrySnapshot(
+            cache_key=cache_key,
+            total_bytes=entry.cached_model.total_bytes(),
+            current_vram_bytes=entry.cached_model.cur_vram_bytes(),
+            compute_device=str(entry.cached_model.compute_device),
+        )
 
     @synchronized
     def drop_model(self, model_key: str) -> int:
