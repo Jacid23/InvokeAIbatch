@@ -27,6 +27,7 @@ from invokeai.app.services.invocation_cache.invocation_cache_common import Invoc
 from invokeai.app.services.model_records.model_records_base import UnknownModelException
 from invokeai.backend.image_util.infill_methods.patchmatch import PatchMatch
 from invokeai.backend.model_manager.taxonomy import BaseModelType, ModelType
+from invokeai.backend.util.devices import TorchDevice
 from invokeai.backend.util.logging import logging
 from invokeai.version import __version__
 
@@ -175,6 +176,10 @@ async def update_runtime_config(
         config = get_config()
         update_dict = changes.model_dump(exclude_unset=True)
         config.update_config(update_dict)
+        if update_dict.get("use_second_gpu_for_text_encoder") is False:
+            ApiDependencies.invoker.services.model_manager.load.ram_cache.drop_auto_evict_protected(
+                exclude_execution_device=TorchDevice.choose_torch_device()
+            )
 
         if config.config_file_path.exists():
             persisted_config = load_and_migrate_config(config.config_file_path)

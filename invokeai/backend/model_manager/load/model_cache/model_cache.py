@@ -928,6 +928,55 @@ class ModelCache:
         self._cached_models.pop(cache_entry.key, None)
 
     @synchronized
+    def drop_auto_evict_protected(self, exclude_execution_device: Optional[torch.device] = None) -> int:
+        """Drop protected cache entries, optionally keeping entries on a specific execution device.
+
+        This is used when split-GPU mode is disabled. It frees the second GPU immediately while letting the main CUDA
+        model stay resident if it is already loaded.
+
+        Returns the number of entries immediately dropped.
+        """
+        dropped: list[CacheRecord] = []
+        bytes_freed = 0
+        exclude_execution_device = (
+            torch.device(exclude_execution_device) if exclude_execution_device is not None else None
+        )
+
+        for entry in list(self._cached_models.values()):
+            if not entry.prevent_auto_evict:
+                continue
+            if exclude_execution_device is not None and entry.cached_model.compute_device == exclude_execution_device:
+                entry.prevent_auto_evict = False
+                continue
+            if entry.is_locked:
+                entry.is_stale = True
+                entry.prevent_auto_evict = False
+                continue
+
+            bytes_freed += entry.cached_model.total_bytes()
+            self._delete_cache_entry(entry)
+            dropped.append(entry)
+
+        if dropped:
+            if self.stats:
+                self.stats.cleared = len(dropped)
+            snapshot = self._get_cache_snapshot()
+            for cb in self._on_cache_models_cleared_callbacks:
+                cb(
+                    models_cleared=len(dropped),
+                    bytes_requested=0,
+                    bytes_freed=bytes_freed,
+                    cache_snapshot=snapshot,
+                )
+            gc.collect()
+            TorchDevice.empty_cache()
+            self._logger.info(
+                f"Dropped {len(dropped)} split-GPU protected model(s) to free {bytes_freed / MB:.2f}MB."
+            )
+
+        return len(dropped)
+
+    @synchronized
     def drop_model(self, model_key: str) -> int:
         """Drop all cache entries belonging to a model so the next load rebuilds them.
 
