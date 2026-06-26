@@ -63,6 +63,16 @@ async def get_app_deps() -> dict[str, str]:
         cuda = "N/A"
 
     deps["CUDA"] = cuda
+    try:
+        cuda_device_count = torch.cuda.device_count() if torch.cuda.is_available() else 0
+    except Exception:
+        cuda_device_count = 0
+    deps["CUDA Devices"] = str(cuda_device_count)
+    for device_index in range(cuda_device_count):
+        try:
+            deps[f"CUDA Device {device_index}"] = torch.cuda.get_device_name(device_index)
+        except Exception:
+            deps[f"CUDA Device {device_index}"] = "Unknown CUDA device"
 
     sorted_deps = dict(sorted(deps.items(), key=lambda item: item[0].lower()))
 
@@ -130,6 +140,10 @@ class UpdateAppGenerationSettingsRequest(BaseModel):
         default=None,
         ge=0,
         description="Keep the last N completed, failed, and canceled queue items on startup. Set to 0 to prune all terminal items.",
+    )
+    use_second_gpu_for_text_encoder: bool | None = Field(
+        default=None,
+        description="Run text encoder models on the CUDA device that is not the main execution device when at least two CUDA GPUs are available.",
     )
 
     @model_validator(mode="after")

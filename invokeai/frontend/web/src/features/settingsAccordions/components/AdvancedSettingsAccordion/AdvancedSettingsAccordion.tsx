@@ -24,6 +24,7 @@ import ParamFlux2KleinModelSelect from 'features/parameters/components/Advanced/
 import ParamQwenImageComponentSourceSelect from 'features/parameters/components/Advanced/ParamQwenImageComponentSourceSelect';
 import ParamQwenImageQuantization from 'features/parameters/components/Advanced/ParamQwenImageQuantization';
 import ParamT5EncoderModelSelect from 'features/parameters/components/Advanced/ParamT5EncoderModelSelect';
+import ParamUseSecondGpuForTextEncoder from 'features/parameters/components/Advanced/ParamUseSecondGpuForTextEncoder';
 import ParamZImageQwen3VaeModelSelect from 'features/parameters/components/Advanced/ParamZImageQwen3VaeModelSelect';
 import ParamSeamlessXAxis from 'features/parameters/components/Seamless/ParamSeamlessXAxis';
 import ParamSeamlessYAxis from 'features/parameters/components/Seamless/ParamSeamlessYAxis';
@@ -113,6 +114,9 @@ export const AdvancedSettingsAccordion = memo(() => {
             {!isFLUX && !isSD3 && <ParamVAEPrecision />}
           </Flex>
         )}
+        <FormControlGroup>
+          <ParamUseSecondGpuForTextEncoder />
+        </FormControlGroup>
         {!isFLUX && !isFlux2 && !isSD3 && !isZImage && !isQwenImage && !isAnima && (
           <>
             <FormControlGroup formLabelProps={formLabelProps}>

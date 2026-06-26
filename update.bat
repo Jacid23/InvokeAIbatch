@@ -67,6 +67,18 @@ if not defined PNPM_CMD (
 	goto :fail
 )
 
+set "PNPM_MAJOR="
+for /f "tokens=1 delims=." %%A in ('call !PNPM_CMD! --version 2^>nul') do set "PNPM_MAJOR=%%A"
+if not "!PNPM_MAJOR!"=="10" (
+	where npx >nul 2>nul
+	if !errorlevel! neq 0 (
+		echo ERROR: Frontend requires pnpm 10, but pnpm !PNPM_MAJOR! was found and npx is unavailable.
+		>>"%LOGFILE%" echo ERROR: pnpm 10 unavailable.
+		goto :fail
+	)
+	set "PNPM_CMD=npx pnpm@10"
+)
+
 echo Using: !PNPM_CMD!
 call !PNPM_CMD! --version
 >>"%LOGFILE%" echo pnpm: !PNPM_CMD!
@@ -87,7 +99,7 @@ if !errorlevel! neq 0 (
 
 echo.
 echo Running: vite build
-call npx vite build
+call !PNPM_CMD! exec vite build
 if !errorlevel! neq 0 (
 	echo ERROR: vite build failed.
 	>>"%LOGFILE%" echo ERROR: vite build failed.

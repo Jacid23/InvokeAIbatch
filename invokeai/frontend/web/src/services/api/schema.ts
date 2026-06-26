@@ -16514,6 +16514,12 @@ export type components = {
              */
             device?: string;
             /**
+             * Use Second Gpu For Text Encoder
+             * @description When at least two CUDA GPUs are available, run text encoder models on the CUDA device that is not the main execution device.
+             * @default false
+             */
+            use_second_gpu_for_text_encoder?: boolean;
+            /**
              * Precision
              * @description Floating point precision. `float16` will consume half the memory of `float32` but produce slightly lower-quality images. The `auto` setting will guess the proper precision based on your video card and operating system.
              * @default auto
@@ -30882,6 +30888,11 @@ export type components = {
              * @description Keep the last N completed, failed, and canceled queue items on startup. Set to 0 to prune all terminal items.
              */
             max_queue_history?: number | null;
+            /**
+             * Use Second Gpu For Text Encoder
+             * @description Run text encoder models on the CUDA device that is not the main execution device when at least two CUDA GPUs are available.
+             */
+            use_second_gpu_for_text_encoder?: boolean | null;
         };
         /**
          * UserDTO
