@@ -148,6 +148,7 @@ class ModelCache:
         log_memory_usage: bool = False,
         logger: Optional[Logger] = None,
         keep_alive_minutes: float = 0,
+        use_multi_cuda_ram_cache: bool = False,
     ):
         """Initialize the model RAM cache.
 
@@ -168,6 +169,7 @@ class ModelCache:
             behaviour.
         :param logger: InvokeAILogger to use (otherwise creates one)
         :param keep_alive_minutes: How long to keep models in cache after last use (in minutes). 0 means keep indefinitely.
+        :param use_multi_cuda_ram_cache: Increase the RAM cache budget for dual-CUDA workflows.
         """
         self._enable_partial_loading = enable_partial_loading
         self._keep_ram_copy_of_weights = keep_ram_copy_of_weights
@@ -177,6 +179,7 @@ class ModelCache:
 
         self._max_ram_cache_size_gb = max_ram_cache_size_gb
         self._max_vram_cache_size_gb = max_vram_cache_size_gb
+        self._use_multi_cuda_ram_cache = use_multi_cuda_ram_cache
 
         self._logger = PrefixedLoggerAdapter(
             logger or InvokeAILogger.get_logger(self.__class__.__name__), "MODEL CACHE"
@@ -678,7 +681,13 @@ class ModelCache:
         # Lookup the total VRAM size for the CUDA execution device.
         total_cuda_vram_bytes: int | None = None
         if self._execution_device.type == "cuda":
-            _, total_cuda_vram_bytes = torch.cuda.mem_get_info(self._execution_device)
+            if self._use_multi_cuda_ram_cache and torch.cuda.device_count() > 1:
+                total_cuda_vram_bytes = 0
+                for device_index in range(torch.cuda.device_count()):
+                    _, device_total_vram_bytes = torch.cuda.mem_get_info(torch.device("cuda", device_index))
+                    total_cuda_vram_bytes += device_total_vram_bytes
+            else:
+                _, total_cuda_vram_bytes = torch.cuda.mem_get_info(self._execution_device)
 
         # Apply heuristic 1.
         # ------------------
@@ -686,7 +695,8 @@ class ModelCache:
         total_system_ram_bytes = psutil.virtual_memory().total
         # Assumed baseline RAM used by InvokeAI for non-model stuff.
         baseline_ram_used_by_invokeai = 2 * GB
-        ram_available_to_model_cache = int(total_system_ram_bytes * 0.5 - baseline_ram_used_by_invokeai)
+        ram_cache_fraction = 0.75 if self._use_multi_cuda_ram_cache else 0.5
+        ram_available_to_model_cache = int(total_system_ram_bytes * ram_cache_fraction - baseline_ram_used_by_invokeai)
 
         # Apply heuristic 2.
         # ------------------
@@ -695,7 +705,10 @@ class ModelCache:
             if self._max_vram_cache_size_gb is not None:
                 max_ram_cache_size_bytes = int(self._max_vram_cache_size_gb * GB)
             else:
-                max_ram_cache_size_bytes = total_cuda_vram_bytes - int(self._execution_device_working_mem_gb * GB)
+                cuda_device_count = torch.cuda.device_count() if self._use_multi_cuda_ram_cache else 1
+                max_ram_cache_size_bytes = total_cuda_vram_bytes - int(
+                    self._execution_device_working_mem_gb * cuda_device_count * GB
+                )
         if ram_available_to_model_cache > max_ram_cache_size_bytes:
             heuristics_applied.append(2)
             ram_available_to_model_cache = max_ram_cache_size_bytes

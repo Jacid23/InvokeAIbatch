@@ -173,8 +173,9 @@ class ModelLoader(ModelLoaderBase):
         loaded_model = self._load_model(config, submodel_type)
 
         execution_device = self._get_execution_device(config, submodel_type)
-        prevent_auto_evict = execution_device is not None and self._should_use_second_gpu_for_text_encoder(
-            config, submodel_type
+        effective_execution_device = execution_device or self._torch_device
+        prevent_auto_evict = (
+            self._app_config.use_second_gpu_for_text_encoder and effective_execution_device.type == "cuda"
         )
 
         self._ram_cache.put(
