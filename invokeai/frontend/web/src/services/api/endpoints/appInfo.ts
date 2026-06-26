@@ -1,3 +1,4 @@
+import type { ModelIdentifierField } from 'features/nodes/types/common';
 import type { OpenAPIV3_1 } from 'openapi-types';
 import type { stringify } from 'querystring';
 import type { paths } from 'services/api/schema';
@@ -77,6 +78,14 @@ export const appInfoApi = api.injectEndpoints({
       },
       invalidatesTags: ['AppConfig'],
     }),
+    syncTextEncoderCache: build.mutation<SyncTextEncoderCacheResponse, SyncTextEncoderCacheArg>({
+      query: (body) => ({
+        url: buildAppInfoUrl('sync_text_encoder_cache'),
+        method: 'POST',
+        body,
+      }),
+      invalidatesTags: ['AppConfig'],
+    }),
     getExternalProviderStatuses: build.query<ExternalProviderStatus[], void>({
       query: () => ({
         url: buildAppInfoUrl('external_providers/status'),
@@ -154,6 +163,7 @@ export const {
   useSetExternalProviderConfigMutation,
   useResetExternalProviderConfigMutation,
   useUpdateRuntimeConfigMutation,
+  useSyncTextEncoderCacheMutation,
   useClearInvocationCacheMutation,
   useDisableInvocationCacheMutation,
   useEnableInvocationCacheMutation,
@@ -164,4 +174,14 @@ export const {
 
 type SetExternalProviderConfigArg = ExternalProviderConfigUpdate & {
   provider_id: string;
+};
+
+type SyncTextEncoderCacheArg = {
+  enabled: boolean;
+  text_encoder_models: ModelIdentifierField[];
+};
+
+type SyncTextEncoderCacheResponse = {
+  dropped: number;
+  loaded: number;
 };

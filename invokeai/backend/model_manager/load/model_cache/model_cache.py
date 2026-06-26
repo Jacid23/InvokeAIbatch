@@ -928,6 +928,38 @@ class ModelCache:
         self._cached_models.pop(cache_entry.key, None)
 
     @synchronized
+    def drop_cache_key(self, cache_key: str) -> int:
+        """Drop one exact cache entry.
+
+        Returns 1 if the entry was immediately dropped, otherwise 0. Locked entries are marked stale and dropped when
+        the last lock releases.
+        """
+        entry = self._cached_models.get(cache_key)
+        if entry is None:
+            return 0
+        if entry.is_locked:
+            entry.is_stale = True
+            entry.prevent_auto_evict = False
+            return 0
+
+        bytes_freed = entry.cached_model.total_bytes()
+        self._delete_cache_entry(entry)
+        if self.stats:
+            self.stats.cleared = 1
+        snapshot = self._get_cache_snapshot()
+        for cb in self._on_cache_models_cleared_callbacks:
+            cb(
+                models_cleared=1,
+                bytes_requested=0,
+                bytes_freed=bytes_freed,
+                cache_snapshot=snapshot,
+            )
+        gc.collect()
+        TorchDevice.empty_cache()
+        self._logger.info(f"Dropped cache entry {cache_key} to free {bytes_freed / MB:.2f}MB.")
+        return 1
+
+    @synchronized
     def drop_auto_evict_protected(self, exclude_execution_device: Optional[torch.device] = None) -> int:
         """Drop protected cache entries, optionally keeping entries on a specific execution device.
 

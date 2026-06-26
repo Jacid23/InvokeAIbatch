@@ -11,6 +11,7 @@ from fastapi import Body, HTTPException, Path
 from fastapi.routing import APIRouter
 from pydantic import BaseModel, Field, model_validator
 
+from invokeai.app.invocations.model import ModelIdentifierField
 from invokeai.app.api.auth_dependencies import AdminUserOrDefault
 from invokeai.app.api.dependencies import ApiDependencies
 from invokeai.app.services.config.config_default import (
@@ -25,8 +26,11 @@ from invokeai.app.services.config.config_default import (
 from invokeai.app.services.external_generation.external_generation_common import ExternalProviderStatus
 from invokeai.app.services.invocation_cache.invocation_cache_common import InvocationCacheStatus
 from invokeai.app.services.model_records.model_records_base import UnknownModelException
+from invokeai.app.util.t5_model_identifier import preprocess_t5_encoder_model_identifier
 from invokeai.backend.image_util.infill_methods.patchmatch import PatchMatch
+from invokeai.backend.model_manager.load.model_cache.model_cache import get_model_cache_key
 from invokeai.backend.model_manager.taxonomy import BaseModelType, ModelType
+from invokeai.backend.model_manager.taxonomy import SubModelType
 from invokeai.backend.util.devices import TorchDevice
 from invokeai.backend.util.logging import logging
 from invokeai.version import __version__
@@ -154,6 +158,41 @@ class UpdateAppGenerationSettingsRequest(BaseModel):
         return self
 
 
+class SyncTextEncoderCacheRequest(BaseModel):
+    """Request to actively sync selected text encoder cache entries with the second-GPU toggle state."""
+
+    enabled: bool = Field(description="Whether second-GPU text encoder mode is enabled.")
+    text_encoder_models: list[ModelIdentifierField] = Field(
+        default_factory=list,
+        description="Selected text encoder models to unload or prewarm.",
+    )
+
+
+class SyncTextEncoderCacheResponse(BaseModel):
+    """Text encoder cache sync result."""
+
+    dropped: int = Field(description="Number of cache entries immediately dropped.")
+    loaded: int = Field(description="Number of selected encoder entries loaded onto their target device.")
+
+
+_PREWARM_STANDALONE_TEXT_ENCODER_TYPES = {
+    ModelType.CLIPEmbed,
+    ModelType.Qwen3Encoder,
+    ModelType.QwenVLEncoder,
+    ModelType.T5Encoder,
+}
+
+
+def _normalize_text_encoder_identifier(model: ModelIdentifierField) -> ModelIdentifierField:
+    if model.type == ModelType.T5Encoder:
+        return preprocess_t5_encoder_model_identifier(model)
+    if model.submodel_type is None and (
+        model.type in _PREWARM_STANDALONE_TEXT_ENCODER_TYPES or model.type == ModelType.Main
+    ):
+        return model.model_copy(update={"submodel_type": SubModelType.TextEncoder})
+    return model
+
+
 @app_router.get(
     "/runtime_config", operation_id="get_runtime_config", status_code=200, response_model=InvokeAIAppConfigWithSetFields
 )
@@ -189,6 +228,41 @@ async def update_runtime_config(
         persisted_config.update_config(update_dict)
         persisted_config.write_file(config.config_file_path)
         return InvokeAIAppConfigWithSetFields(set_fields=config.model_fields_set, config=config)
+
+
+@app_router.post(
+    "/sync_text_encoder_cache",
+    operation_id="sync_text_encoder_cache",
+    status_code=200,
+    response_model=SyncTextEncoderCacheResponse,
+)
+async def sync_text_encoder_cache(
+    _: AdminUserOrDefault,
+    request: SyncTextEncoderCacheRequest = Body(description="Selected text encoder cache sync request"),
+) -> SyncTextEncoderCacheResponse:
+    ram_cache = ApiDependencies.invoker.services.model_manager.load.ram_cache
+    dropped = 0
+    loaded = 0
+
+    normalized_models = [_normalize_text_encoder_identifier(model) for model in request.text_encoder_models]
+    for model in normalized_models:
+        dropped += ram_cache.drop_cache_key(get_model_cache_key(model.key, model.submodel_type))
+
+    if not request.enabled:
+        dropped += ram_cache.drop_auto_evict_protected(exclude_execution_device=TorchDevice.choose_torch_device())
+        return SyncTextEncoderCacheResponse(dropped=dropped, loaded=loaded)
+
+    for model in normalized_models:
+        try:
+            config = ApiDependencies.invoker.services.model_manager.store.get_model(model.key)
+            loaded_model = ApiDependencies.invoker.services.model_manager.load.load_model(config, model.submodel_type)
+            with loaded_model.model_on_device():
+                pass
+            loaded += 1
+        except UnknownModelException:
+            raise HTTPException(status_code=404, detail=f"Unknown model: {model.key}")
+
+    return SyncTextEncoderCacheResponse(dropped=dropped, loaded=loaded)
 
 
 @app_router.get(
