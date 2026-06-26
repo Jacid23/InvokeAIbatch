@@ -926,6 +926,16 @@ class ModelCache:
 
     def _delete_cache_entry(self, cache_entry: CacheRecord) -> None:
         """Delete cache_entry from the cache if it exists. No exception is thrown if it doesn't exist."""
+        vram_bytes = cache_entry.cached_model.cur_vram_bytes()
+        if vram_bytes > 0:
+            try:
+                unloaded_bytes = cache_entry.cached_model.full_unload_from_vram()
+                self._logger.debug(
+                    f"Unloaded {unloaded_bytes / MB:.2f}MB from {cache_entry.cached_model.compute_device} "
+                    f"before deleting cache entry {cache_entry.key}."
+                )
+            except Exception:
+                self._logger.exception(f"Failed to unload cache entry {cache_entry.key} before deleting it.")
         self._cache_stack = [key for key in self._cache_stack if key != cache_entry.key]
         self._cached_models.pop(cache_entry.key, None)
 
@@ -1061,6 +1071,18 @@ class ModelCache:
             current_vram_bytes=entry.cached_model.cur_vram_bytes(),
             compute_device=str(entry.cached_model.compute_device),
         )
+
+    @synchronized
+    def get_cuda_cache_usage_bytes(self) -> dict[int, int]:
+        """Get cached model VRAM usage grouped by CUDA device index."""
+        usage: dict[int, int] = {}
+        for entry in self._cached_models.values():
+            compute_device = entry.cached_model.compute_device
+            if compute_device.type != "cuda":
+                continue
+            device_index = compute_device.index if compute_device.index is not None else torch.cuda.current_device()
+            usage[device_index] = usage.get(device_index, 0) + entry.cached_model.cur_vram_bytes()
+        return usage
 
     @synchronized
     def drop_model(self, model_key: str) -> int:

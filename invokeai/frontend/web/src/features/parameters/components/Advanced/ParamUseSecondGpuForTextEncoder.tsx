@@ -53,6 +53,7 @@ type TextEncoderCacheStatus = {
   cuda_devices: {
     index: number;
     used_gb: number;
+    invoke_cache_gb: number;
     total_gb: number;
   }[];
 };
@@ -191,7 +192,7 @@ const ParamUseSecondGpuForTextEncoder = () => {
               : selectedCount
                 ? `${loadedCount}/${selectedCount} loaded (${loadedVramGb.toFixed(1)} GB)${
                     targetGpuStatus
-                      ? ` · GPU ${targetGpuStatus.index} ${targetGpuStatus.used_gb}/${targetGpuStatus.total_gb} GB`
+                      ? ` · GPU ${targetGpuStatus.index}: Invoke ${targetGpuStatus.invoke_cache_gb}/${targetGpuStatus.total_gb} GB, total ${targetGpuStatus.used_gb}/${targetGpuStatus.total_gb} GB`
                       : ''
                   }`
                 : 'No encoder selected'}

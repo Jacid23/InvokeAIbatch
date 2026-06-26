@@ -193,7 +193,8 @@ class CudaDeviceStatus(BaseModel):
 
     index: int = Field(description="CUDA device index.")
     name: str = Field(description="CUDA device name.")
-    used_gb: float = Field(description="Device memory used in GB.")
+    used_gb: float = Field(description="Total device memory used in GB, including non-InvokeAI processes.")
+    invoke_cache_gb: float = Field(description="InvokeAI model cache memory used on this device in GB.")
     total_gb: float = Field(description="Total device memory in GB.")
 
 
@@ -225,6 +226,8 @@ def _normalize_text_encoder_identifier(model: ModelIdentifierField) -> ModelIden
 def _get_cuda_device_statuses() -> list[CudaDeviceStatus]:
     if not torch.cuda.is_available():
         return []
+    ram_cache = ApiDependencies.invoker.services.model_manager.load.ram_cache
+    invoke_cache_usage = ram_cache.get_cuda_cache_usage_bytes()
     statuses: list[CudaDeviceStatus] = []
     for device_index in range(torch.cuda.device_count()):
         device = torch.device("cuda", device_index)
@@ -235,6 +238,7 @@ def _get_cuda_device_statuses() -> list[CudaDeviceStatus]:
                 index=device_index,
                 name=torch.cuda.get_device_name(device),
                 used_gb=round(used_bytes / (1024**3), 2),
+                invoke_cache_gb=round(invoke_cache_usage.get(device_index, 0) / (1024**3), 2),
                 total_gb=round(total_bytes / (1024**3), 2),
             )
         )

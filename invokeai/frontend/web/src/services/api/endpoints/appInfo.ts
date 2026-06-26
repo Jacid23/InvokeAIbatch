@@ -209,6 +209,7 @@ type TextEncoderCacheStatusResponse = {
     index: number;
     name: string;
     used_gb: number;
+    invoke_cache_gb: number;
     total_gb: number;
   }[];
 };
