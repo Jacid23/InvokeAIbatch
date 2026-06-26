@@ -507,7 +507,8 @@ class ModelCache:
         model_total_bytes = cache_entry.cached_model.total_bytes()
         model_vram_needed = model_total_bytes - model_cur_vram_bytes
 
-        vram_available = self._get_vram_available(working_mem_bytes)
+        model_compute_device = cache_entry.cached_model.compute_device
+        vram_available = self._get_vram_available(working_mem_bytes, model_compute_device)
         self._logger.debug(
             f"Before unloading: {self._get_vram_state_str(model_cur_vram_bytes, model_total_bytes, vram_available)}"
         )
@@ -516,11 +517,11 @@ class ModelCache:
         # 1. If the model can fit entirely in VRAM, then make enough room for it to be loaded fully.
         # 2. If the model can't fit fully into VRAM, then unload all other models and load as much of the model as
         #    possible.
-        vram_bytes_freed = self._offload_unlocked_models(model_vram_needed, working_mem_bytes)
+        vram_bytes_freed = self._offload_unlocked_models(model_vram_needed, working_mem_bytes, model_compute_device)
         self._logger.debug(f"Unloaded models (if necessary): vram_bytes_freed={(vram_bytes_freed / MB):.2f}MB")
 
         # Check the updated vram_available after offloading.
-        vram_available = self._get_vram_available(working_mem_bytes)
+        vram_available = self._get_vram_available(working_mem_bytes, model_compute_device)
         self._logger.debug(
             f"After unloading: {self._get_vram_state_str(model_cur_vram_bytes, model_total_bytes, vram_available)}"
         )
@@ -529,7 +530,7 @@ class ModelCache:
             # There is insufficient VRAM available. As a last resort, try to unload the model being locked from VRAM,
             # as it may still be loaded from a previous use.
             vram_bytes_freed_from_own_model = self._move_model_to_ram(cache_entry, -vram_available)
-            vram_available = self._get_vram_available(working_mem_bytes)
+            vram_available = self._get_vram_available(working_mem_bytes, model_compute_device)
             self._logger.debug(
                 f"Unloaded {vram_bytes_freed_from_own_model / MB:.2f}MB from the model being locked ({cache_entry.key})."
             )
@@ -542,7 +543,7 @@ class ModelCache:
         model_bytes_loaded = self._move_model_to_vram(cache_entry, vram_available + MB)
 
         model_cur_vram_bytes = cache_entry.cached_model.cur_vram_bytes()
-        vram_available = self._get_vram_available(working_mem_bytes)
+        vram_available = self._get_vram_available(working_mem_bytes, model_compute_device)
         loaded_percent = model_cur_vram_bytes / model_total_bytes if model_total_bytes > 0 else 0
         # Use the model's actual compute_device for logging, not the cache's default
         model_device = cache_entry.cached_model.compute_device
@@ -590,46 +591,52 @@ class ModelCache:
             self._delete_cache_entry(cache_entry)
             raise
 
-    def _get_vram_available(self, working_mem_bytes: Optional[int]) -> int:
+    def _get_vram_available(
+        self, working_mem_bytes: Optional[int], execution_device: Optional[torch.device] = None
+    ) -> int:
         """Calculate the amount of additional VRAM available for the cache to use (takes into account the working
         memory).
         """
+        execution_device = execution_device or self._execution_device
+
         # If self._max_vram_cache_size_gb is set, then it overrides the default logic.
         if self._max_vram_cache_size_gb is not None:
             vram_total_available_to_cache = int(self._max_vram_cache_size_gb * GB)
-            return vram_total_available_to_cache - self._get_vram_in_use()
+            return vram_total_available_to_cache - self._get_vram_in_use(execution_device)
 
         working_mem_bytes_default = int(self._execution_device_working_mem_gb * GB)
         working_mem_bytes = max(working_mem_bytes or working_mem_bytes_default, working_mem_bytes_default)
 
-        if self._execution_device.type == "cuda":
+        if execution_device.type == "cuda":
             # TODO(ryand): It is debatable whether we should use memory_reserved() or memory_allocated() here.
             # memory_reserved() includes memory reserved by the torch CUDA memory allocator that may or may not be
             # re-used for future allocations. For now, we use memory_allocated() to be conservative.
-            # vram_reserved = torch.cuda.memory_reserved(self._execution_device)
-            vram_allocated = torch.cuda.memory_allocated(self._execution_device)
-            vram_free, _vram_total = torch.cuda.mem_get_info(self._execution_device)
+            # vram_reserved = torch.cuda.memory_reserved(execution_device)
+            vram_allocated = torch.cuda.memory_allocated(execution_device)
+            vram_free, _vram_total = torch.cuda.mem_get_info(execution_device)
             vram_available_to_process = vram_free + vram_allocated
-        elif self._execution_device.type == "mps":
+        elif execution_device.type == "mps":
             vram_reserved = torch.mps.driver_allocated_memory()
             # TODO(ryand): Is it accurate that MPS shares memory with the CPU?
             vram_free = psutil.virtual_memory().available
             vram_available_to_process = vram_free + vram_reserved
         else:
-            raise ValueError(f"Unsupported execution device: {self._execution_device.type}")
+            raise ValueError(f"Unsupported execution device: {execution_device.type}")
 
         vram_total_available_to_cache = vram_available_to_process - working_mem_bytes
-        vram_cur_available_to_cache = vram_total_available_to_cache - self._get_vram_in_use()
+        vram_cur_available_to_cache = vram_total_available_to_cache - self._get_vram_in_use(execution_device)
         return vram_cur_available_to_cache
 
-    def _get_vram_in_use(self) -> int:
+    def _get_vram_in_use(self, execution_device: Optional[torch.device] = None) -> int:
         """Get the amount of VRAM currently in use by the cache."""
-        if self._execution_device.type == "cuda":
-            return torch.cuda.memory_allocated()
-        elif self._execution_device.type == "mps":
+        execution_device = execution_device or self._execution_device
+
+        if execution_device.type == "cuda":
+            return torch.cuda.memory_allocated(execution_device)
+        elif execution_device.type == "mps":
             return torch.mps.current_allocated_memory()
         else:
-            raise ValueError(f"Unsupported execution device type: {self._execution_device.type}")
+            raise ValueError(f"Unsupported execution device type: {execution_device.type}")
         # Alternative definition of VRAM in use:
         # return sum(ce.cached_model.cur_vram_bytes() for ce in self._cached_models.values())
 
@@ -719,7 +726,12 @@ class ModelCache:
             + f"vram_available={(vram_available / MB):.0f} MB, "
         )
 
-    def _offload_unlocked_models(self, vram_bytes_required: int, working_mem_bytes: Optional[int] = None) -> int:
+    def _offload_unlocked_models(
+        self,
+        vram_bytes_required: int,
+        working_mem_bytes: Optional[int] = None,
+        execution_device: Optional[torch.device] = None,
+    ) -> int:
         """Offload models from the execution_device until vram_bytes_required bytes are available, or all models are
         offloaded. Of course, locked models are not offloaded.
 
@@ -729,15 +741,18 @@ class ModelCache:
         self._logger.debug(
             f"Offloading unlocked models with goal of making room for {vram_bytes_required / MB:.2f}MB of VRAM."
         )
+        execution_device = execution_device or self._execution_device
         vram_bytes_freed = 0
         # TODO(ryand): Give more thought to the offloading policy used here.
         cache_entries_increasing_size = sorted(self._cached_models.values(), key=lambda x: x.cached_model.total_bytes())
         for cache_entry in cache_entries_increasing_size:
             # We do not fully trust the count of bytes freed, so we check again on each iteration.
-            vram_available = self._get_vram_available(working_mem_bytes)
+            vram_available = self._get_vram_available(working_mem_bytes, execution_device)
             vram_bytes_to_free = vram_bytes_required - vram_available
             if vram_bytes_to_free <= 0:
                 break
+            if cache_entry.cached_model.compute_device != execution_device:
+                continue
             if cache_entry.is_locked:
                 # TODO(ryand): In the future, we may want to partially unload locked models, but this requires careful
                 # handling of model patches (e.g. LoRA).
