@@ -30889,6 +30889,11 @@ export type components = {
              */
             max_queue_history?: number | null;
             /**
+             * Model Cache Keep Alive Min
+             * @description How long to keep unlocked models in cache after last use, in minutes. 0 keeps models indefinitely.
+             */
+            model_cache_keep_alive_min?: number | null;
+            /**
              * Use Second Gpu For Text Encoder
              * @description Run text encoder models on the CUDA device that is not the main execution device when at least two CUDA GPUs are available.
              */

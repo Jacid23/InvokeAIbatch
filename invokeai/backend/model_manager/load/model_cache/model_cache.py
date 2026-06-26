@@ -319,6 +319,16 @@ class ModelCache:
             self._timeout_timer = None
 
     @synchronized
+    def set_keep_alive_minutes(self, keep_alive_minutes: float) -> None:
+        """Update the cache keep-alive timeout."""
+        self._keep_alive_minutes = keep_alive_minutes
+        if self._timeout_timer is not None:
+            self._timeout_timer.cancel()
+            self._timeout_timer = None
+        if keep_alive_minutes > 0:
+            self._record_activity()
+
+    @synchronized
     @record_activity
     def put(
         self,

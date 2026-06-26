@@ -146,6 +146,11 @@ class UpdateAppGenerationSettingsRequest(BaseModel):
         ge=0,
         description="Keep the last N completed, failed, and canceled queue items on startup. Set to 0 to prune all terminal items.",
     )
+    model_cache_keep_alive_min: float | None = Field(
+        default=None,
+        ge=0,
+        description="How long to keep unlocked models in cache after last use, in minutes. 0 keeps models indefinitely.",
+    )
     use_second_gpu_for_text_encoder: bool | None = Field(
         default=None,
         description="Run text encoder models on the CUDA device that is not the main execution device when at least two CUDA GPUs are available.",
@@ -288,6 +293,10 @@ async def update_runtime_config(
         config = get_config()
         update_dict = changes.model_dump(exclude_unset=True)
         config.update_config(update_dict)
+        if "model_cache_keep_alive_min" in update_dict:
+            ApiDependencies.invoker.services.model_manager.load.ram_cache.set_keep_alive_minutes(
+                config.model_cache_keep_alive_min
+            )
         if update_dict.get("use_second_gpu_for_text_encoder") is False:
             ApiDependencies.invoker.services.model_manager.load.ram_cache.drop_cuda_entries_except(
                 keep_execution_device=TorchDevice.choose_torch_device()
