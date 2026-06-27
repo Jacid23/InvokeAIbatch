@@ -138,7 +138,6 @@ const ParamUseSecondGpuForTextEncoder = () => {
 
   useEffect(() => {
     if (!runtimeConfig || !isAvailable) {
-      setCacheStatus(null);
       return;
     }
     getTextEncoderCacheStatus({
