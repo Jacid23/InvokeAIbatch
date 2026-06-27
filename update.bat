@@ -76,7 +76,7 @@ if not "!PNPM_MAJOR!"=="10" (
 		>>"%LOGFILE%" echo ERROR: pnpm 10 unavailable.
 		goto :fail
 	)
-	set "PNPM_CMD=npx pnpm@10"
+	set "PNPM_CMD=npx --yes pnpm@10"
 )
 
 echo Using: !PNPM_CMD!
