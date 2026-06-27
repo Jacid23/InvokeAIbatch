@@ -58,11 +58,6 @@ type TextEncoderCacheStatus = {
   }[];
 };
 
-const getDeviceIndex = (device: string | undefined, fallbackIndex: number): number => {
-  const match = device?.match(/^cuda:(\d+)$/);
-  return match ? Number(match[1]) : fallbackIndex;
-};
-
 const ParamUseSecondGpuForTextEncoder = () => {
   const currentUser = useAppSelector(selectCurrentUser);
   const isFLUX = useAppSelector(selectIsFLUX);
@@ -130,18 +125,14 @@ const ParamUseSecondGpuForTextEncoder = () => {
     zImageQwen3EncoderModel,
     zImageQwen3SourceModel,
   ]);
-  const targetGpuIndex = useMemo(() => {
-    if (!runtimeConfig || cudaDeviceCount < 2) {
-      return null;
-    }
-    const mainGpuIndex = getDeviceIndex(runtimeConfig.config.device, 0);
-    return [...Array(cudaDeviceCount).keys()].find((index) => index !== mainGpuIndex) ?? null;
-  }, [cudaDeviceCount, runtimeConfig]);
-  const targetGpuStatus =
-    targetGpuIndex === null ? null : cacheStatus?.cuda_devices.find((device) => device.index === targetGpuIndex);
   const loadedCount = cacheStatus?.models.filter((model) => model.loaded).length ?? 0;
   const selectedCount = selectedTextEncoderModels.length;
-  const loadedVramGb = cacheStatus?.models.reduce((total, model) => total + model.vram_gb, 0) ?? 0;
+  const encoderCacheStatusLabel =
+    isSyncing || isLoadingStatus
+      ? 'Syncing'
+      : isChecked && selectedCount > 0 && loadedCount === selectedCount
+        ? 'Loaded'
+        : 'Unloaded';
 
   useEffect(() => {
     if (!runtimeConfig || !isAvailable) {
@@ -187,15 +178,7 @@ const ParamUseSecondGpuForTextEncoder = () => {
         <Flex flexDir="column" gap={1}>
           <Text>Use Second GPU for Text Encoder</Text>
           <Text fontSize="xs" color="base.300">
-            {isSyncing || isLoadingStatus
-              ? 'Syncing'
-              : selectedCount
-                ? `${loadedCount}/${selectedCount} loaded (${loadedVramGb.toFixed(1)} GB)${
-                    targetGpuStatus
-                      ? ` · GPU ${targetGpuStatus.index}: Invoke ${targetGpuStatus.invoke_cache_gb}/${targetGpuStatus.total_gb} GB, total ${targetGpuStatus.used_gb}/${targetGpuStatus.total_gb} GB`
-                      : ''
-                  }`
-                : 'No encoder selected'}
+            {encoderCacheStatusLabel}
           </Text>
         </Flex>
       </FormLabel>

@@ -1,10 +1,12 @@
 import locale
+import subprocess
 from enum import Enum
 from importlib.metadata import distributions
 from pathlib import Path as FilePath
 from threading import Lock
 from typing import Any
 
+import psutil
 import torch
 import yaml
 from fastapi import Body, HTTPException, Path
@@ -210,6 +212,27 @@ class TextEncoderCacheStatusResponse(BaseModel):
     cuda_devices: list[CudaDeviceStatus] = Field(description="CUDA memory status.")
 
 
+class SystemGpuStatus(BaseModel):
+    """Basic GPU status."""
+
+    index: int = Field(description="GPU device index.")
+    name: str = Field(description="GPU device name.")
+    utilization_percent: float | None = Field(default=None, description="GPU utilization percent.")
+    loaded_gb: float = Field(description="GPU memory used in GB.")
+    total_gb: float = Field(description="Total GPU memory in GB.")
+
+
+class SystemStatusResponse(BaseModel):
+    """Basic system status."""
+
+    cpu_percent: float = Field(description="CPU utilization percent.")
+    cpu_frequency_ghz: float | None = Field(default=None, description="Current CPU frequency in GHz.")
+    memory_used_gb: float = Field(description="System memory used in GB.")
+    memory_total_gb: float = Field(description="Total system memory in GB.")
+    memory_percent: float = Field(description="System memory utilization percent.")
+    gpus: list[SystemGpuStatus] = Field(description="GPU statuses.")
+
+
 _PREWARM_STANDALONE_TEXT_ENCODER_TYPES = {
     ModelType.CLIPEmbed,
     ModelType.Qwen3Encoder,
@@ -248,6 +271,88 @@ def _get_cuda_device_statuses() -> list[CudaDeviceStatus]:
             )
         )
     return statuses
+
+
+def _get_nvidia_smi_statuses() -> dict[int, tuple[float | None, float, float]]:
+    """Return GPU utilization percent, memory used MB, and memory total MB keyed by device index."""
+    try:
+        result = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=index,utilization.gpu,memory.used,memory.total",
+                "--format=csv,noheader,nounits",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=1,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return {}
+
+    if result.returncode != 0:
+        return {}
+
+    statuses: dict[int, tuple[float | None, float, float]] = {}
+    for line in result.stdout.splitlines():
+        parts = [part.strip() for part in line.split(",")]
+        if len(parts) != 4:
+            continue
+        try:
+            index = int(parts[0])
+            utilization_percent = float(parts[1])
+            memory_used_mb = float(parts[2])
+            memory_total_mb = float(parts[3])
+        except ValueError:
+            continue
+        statuses[index] = (utilization_percent, memory_used_mb, memory_total_mb)
+    return statuses
+
+
+def _get_system_gpu_statuses() -> list[SystemGpuStatus]:
+    if not torch.cuda.is_available():
+        return []
+
+    nvidia_smi_statuses = _get_nvidia_smi_statuses()
+    statuses: list[SystemGpuStatus] = []
+    for device_index in range(torch.cuda.device_count()):
+        device = torch.device("cuda", device_index)
+        nvidia_smi_status = nvidia_smi_statuses.get(device_index)
+        if nvidia_smi_status is not None:
+            utilization_percent, memory_used_mb, memory_total_mb = nvidia_smi_status
+            loaded_gb = memory_used_mb / 1024
+            total_gb = memory_total_mb / 1024
+        else:
+            utilization_percent = None
+            free_bytes, total_bytes = torch.cuda.mem_get_info(device)
+            loaded_gb = (total_bytes - free_bytes) / (1024**3)
+            total_gb = total_bytes / (1024**3)
+
+        statuses.append(
+            SystemGpuStatus(
+                index=device_index,
+                name=torch.cuda.get_device_name(device),
+                utilization_percent=(
+                    None if utilization_percent is None else round(utilization_percent, 1)
+                ),
+                loaded_gb=round(loaded_gb, 1),
+                total_gb=round(total_gb, 1),
+            )
+        )
+    return statuses
+
+
+def _get_system_status() -> SystemStatusResponse:
+    memory = psutil.virtual_memory()
+    cpu_frequency = psutil.cpu_freq()
+    return SystemStatusResponse(
+        cpu_percent=round(psutil.cpu_percent(interval=None), 1),
+        cpu_frequency_ghz=None if cpu_frequency is None else round(cpu_frequency.current / 1000, 2),
+        memory_used_gb=round((memory.total - memory.available) / (1024**3), 1),
+        memory_total_gb=round(memory.total / (1024**3), 1),
+        memory_percent=round(memory.percent, 1),
+        gpus=_get_system_gpu_statuses(),
+    )
 
 
 def _get_text_encoder_cache_status(models: list[ModelIdentifierField]) -> TextEncoderCacheStatusResponse:
@@ -362,6 +467,16 @@ async def get_text_encoder_cache_status(
     request: SyncTextEncoderCacheRequest = Body(description="Selected text encoder cache status request"),
 ) -> TextEncoderCacheStatusResponse:
     return _get_text_encoder_cache_status(request.text_encoder_models)
+
+
+@app_router.get(
+    "/system_status",
+    operation_id="get_system_status",
+    status_code=200,
+    response_model=SystemStatusResponse,
+)
+async def get_system_status(_: AdminUserOrDefault) -> SystemStatusResponse:
+    return _get_system_status()
 
 
 @app_router.get(

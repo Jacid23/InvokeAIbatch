@@ -26,6 +26,7 @@ import ParamQwenImageQuantization from 'features/parameters/components/Advanced/
 import ParamT5EncoderModelSelect from 'features/parameters/components/Advanced/ParamT5EncoderModelSelect';
 import ParamUseSecondGpuForTextEncoder from 'features/parameters/components/Advanced/ParamUseSecondGpuForTextEncoder';
 import ParamZImageQwen3VaeModelSelect from 'features/parameters/components/Advanced/ParamZImageQwen3VaeModelSelect';
+import SystemHardwareStatus from 'features/parameters/components/Advanced/SystemHardwareStatus';
 import ParamSeamlessXAxis from 'features/parameters/components/Seamless/ParamSeamlessXAxis';
 import ParamSeamlessYAxis from 'features/parameters/components/Seamless/ParamSeamlessYAxis';
 import ParamColorCompensation from 'features/parameters/components/VAEModel/ParamColorCompensation';
@@ -173,6 +174,7 @@ export const AdvancedSettingsAccordion = memo(() => {
             <ParamUseSecondGpuForTextEncoder />
           </FormControlGroup>
         )}
+        <SystemHardwareStatus />
       </Flex>
     </StandaloneAccordion>
   );

@@ -93,6 +93,12 @@ export const appInfoApi = api.injectEndpoints({
         body,
       }),
     }),
+    getSystemStatus: build.query<SystemStatusResponse, void>({
+      query: () => ({
+        url: buildAppInfoUrl('system_status'),
+        method: 'GET',
+      }),
+    }),
     getExternalProviderStatuses: build.query<ExternalProviderStatus[], void>({
       query: () => ({
         url: buildAppInfoUrl('external_providers/status'),
@@ -172,6 +178,7 @@ export const {
   useUpdateRuntimeConfigMutation,
   useSyncTextEncoderCacheMutation,
   useGetTextEncoderCacheStatusMutation,
+  useGetSystemStatusQuery,
   useClearInvocationCacheMutation,
   useDisableInvocationCacheMutation,
   useEnableInvocationCacheMutation,
@@ -210,6 +217,21 @@ type TextEncoderCacheStatusResponse = {
     name: string;
     used_gb: number;
     invoke_cache_gb: number;
+    total_gb: number;
+  }[];
+};
+
+export type SystemStatusResponse = {
+  cpu_percent: number;
+  cpu_frequency_ghz: number | null;
+  memory_used_gb: number;
+  memory_total_gb: number;
+  memory_percent: number;
+  gpus: {
+    index: number;
+    name: string;
+    utilization_percent: number | null;
+    loaded_gb: number;
     total_gb: number;
   }[];
 };
