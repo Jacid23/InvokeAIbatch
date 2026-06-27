@@ -1,0 +1,1798 @@
+diff --git a/docker/.env.sample b/docker/.env.sample
+deleted file mode 100644
+index 7b10af936e..0000000000
+--- a/docker/.env.sample
++++ /dev/null
+@@ -1,31 +0,0 @@
+-## Make a copy of this file named `.env` and fill in the values below.
+-## Any environment variables supported by InvokeAI can be specified here,
+-## in addition to the examples below.
+-
+-## INVOKEAI_ROOT is the path *on the host system* where Invoke will store its data.
+-## It is mounted into the container and allows both containerized and non-containerized usage of Invoke.
+-# Usually this is the only variable you need to set. It can be relative or absolute.
+-# INVOKEAI_ROOT=~/invokeai
+-
+-## HOST_INVOKEAI_ROOT and CONTAINER_INVOKEAI_ROOT can be used to control the on-host
+-## and in-container paths separately, if needed.
+-## HOST_INVOKEAI_ROOT is the path on the docker host's filesystem where Invoke will store data.
+-## If relative, it will be relative to the docker directory in which the docker-compose.yml file is located
+-## CONTAINER_INVOKEAI_ROOT is the path within the container where Invoke will expect to find the runtime directory.
+-## It MUST be absolute. There is usually no need to change this.
+-# HOST_INVOKEAI_ROOT=../../invokeai-data
+-# CONTAINER_INVOKEAI_ROOT=/invokeai
+-
+-## INVOKEAI_PORT is the port on which the InvokeAI web interface will be available
+-# INVOKEAI_PORT=9090
+-
+-## GPU_DRIVER can be set to either `cuda` or `rocm` to enable GPU support in the container accordingly.
+-# GPU_DRIVER=cuda #| rocm
+-
+-## If you are using ROCM, you will need to ensure that the render group within the container and the host system use the same group ID.
+-## To obtain the group ID of the render group on the host system, run `getent group render` and grab the number.
+-# RENDER_GROUP_ID=
+-
+-## CONTAINER_UID can be set to the UID of the user on the host system that should own the files in the container.
+-## It is usually not necessary to change this. Use `id -u` on the host system to find the UID.
+-# CONTAINER_UID=1000
+diff --git a/docker/Dockerfile b/docker/Dockerfile
+deleted file mode 100644
+index b1b709d54d..0000000000
+--- a/docker/Dockerfile
++++ /dev/null
+@@ -1,107 +0,0 @@
+-# syntax=docker/dockerfile:1.4
+-
+-#### Web UI ------------------------------------
+-
+-FROM docker.io/node:22-slim AS web-builder
+-ENV PNPM_HOME="/pnpm"
+-ENV PATH="$PNPM_HOME:$PATH"
+-RUN corepack use pnpm@10.x && corepack enable
+-
+-WORKDIR /build
+-COPY invokeai/frontend/web/ ./
+-RUN --mount=type=cache,target=/pnpm/store \
+-    pnpm install --frozen-lockfile
+-RUN npx vite build
+-
+-## Backend ---------------------------------------
+-
+-FROM library/ubuntu:24.04
+-
+-ARG DEBIAN_FRONTEND=noninteractive
+-RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+-RUN --mount=type=cache,target=/var/cache/apt \
+-    --mount=type=cache,target=/var/lib/apt \
+-    apt update && apt install -y --no-install-recommends \
+-    ca-certificates \
+-    git \
+-    gosu \
+-    libglib2.0-0 \
+-    libgl1 \
+-    libglx-mesa0 \
+-    build-essential \
+-    libopencv-dev \
+-    libstdc++-10-dev
+-
+-ENV \
+-    PYTHONUNBUFFERED=1 \
+-    PYTHONDONTWRITEBYTECODE=1 \
+-    VIRTUAL_ENV=/opt/venv \
+-    INVOKEAI_SRC=/opt/invokeai \
+-    PYTHON_VERSION=3.12 \
+-    UV_PYTHON=3.12 \
+-    UV_COMPILE_BYTECODE=1 \
+-    UV_MANAGED_PYTHON=1 \
+-    UV_LINK_MODE=copy \
+-    UV_PROJECT_ENVIRONMENT=/opt/venv \
+-    INVOKEAI_ROOT=/invokeai \
+-    INVOKEAI_HOST=0.0.0.0 \
+-    INVOKEAI_PORT=9090 \
+-    PATH="/opt/venv/bin:$PATH" \
+-    CONTAINER_UID=${CONTAINER_UID:-1000} \
+-    CONTAINER_GID=${CONTAINER_GID:-1000}
+-
+-ARG GPU_DRIVER=cuda
+-
+-# Install `uv` for package management
+-COPY --from=ghcr.io/astral-sh/uv:0.6.9 /uv /uvx /bin/
+-
+-# Install python & allow non-root user to use it by traversing the /root dir without read permissions
+-RUN --mount=type=cache,target=/root/.cache/uv \
+-    uv python install ${PYTHON_VERSION} && \
+-    # chmod --recursive a+rX /root/.local/share/uv/python
+-    chmod 711 /root
+-
+-WORKDIR ${INVOKEAI_SRC}
+-
+-# Install project's dependencies as a separate layer so they aren't rebuilt every commit.
+-# bind-mount instead of copy to defer adding sources to the image until next layer.
+-#
+-# NOTE: there are no pytorch builds for arm64 + cuda, only cpu
+-# x86_64/CUDA is the default
+-RUN --mount=type=cache,target=/root/.cache/uv \
+-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+-    --mount=type=bind,source=uv.lock,target=uv.lock \
+-    # this is just to get the package manager to recognize that the project exists, without making changes to the docker layer
+-    --mount=type=bind,source=invokeai/version,target=invokeai/version \
+-    ulimit -n 30000 && \
+-    uv sync --extra $GPU_DRIVER --frozen
+-
+-# Link amdgpu.ids for ROCm builds
+-# contributed by https://github.com/Rubonnek
+-RUN mkdir -p "/opt/amdgpu/share/libdrm" &&\
+-    ln -s "/usr/share/libdrm/amdgpu.ids" "/opt/amdgpu/share/libdrm/amdgpu.ids" && groupadd render
+-
+-# build patchmatch
+-RUN cd /usr/lib/$(uname -p)-linux-gnu/pkgconfig/ && ln -sf opencv4.pc opencv.pc
+-RUN python -c "from patchmatch import patch_match"
+-
+-RUN mkdir -p ${INVOKEAI_ROOT} && chown -R ${CONTAINER_UID}:${CONTAINER_GID} ${INVOKEAI_ROOT}
+-
+-COPY docker/docker-entrypoint.sh ./
+-ENTRYPOINT ["/opt/invokeai/docker-entrypoint.sh"]
+-CMD ["invokeai-web"]
+-
+-# --link requires buldkit w/ dockerfile syntax 1.4, does not work with podman
+-COPY --link --from=web-builder /build/dist ${INVOKEAI_SRC}/invokeai/frontend/web/dist
+-
+-# add sources last to minimize image changes on code changes
+-COPY invokeai ${INVOKEAI_SRC}/invokeai
+-
+-# this should not increase image size because we've already installed dependencies
+-# in a previous layer
+-RUN --mount=type=cache,target=/root/.cache/uv \
+-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+-    --mount=type=bind,source=uv.lock,target=uv.lock \
+-    ulimit -n 30000 && \
+-    uv pip install -e .[$GPU_DRIVER]
+-
+diff --git a/docker/Dockerfile-rocm-full b/docker/Dockerfile-rocm-full
+deleted file mode 100644
+index 087864b3f2..0000000000
+--- a/docker/Dockerfile-rocm-full
++++ /dev/null
+@@ -1,136 +0,0 @@
+-# syntax=docker/dockerfile:1.4
+-
+-#### Web UI ------------------------------------
+-
+-FROM docker.io/node:22-slim AS web-builder
+-ENV PNPM_HOME="/pnpm"
+-ENV PATH="$PNPM_HOME:$PATH"
+-RUN corepack use pnpm@8.x
+-RUN corepack enable
+-
+-WORKDIR /build
+-COPY invokeai/frontend/web/ ./
+-RUN --mount=type=cache,target=/pnpm/store \
+-    pnpm install --frozen-lockfile
+-RUN npx vite build
+-
+-## Backend ---------------------------------------
+-
+-FROM library/ubuntu:24.04
+-
+-ARG DEBIAN_FRONTEND=noninteractive
+-RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+-RUN --mount=type=cache,target=/var/cache/apt \
+-    --mount=type=cache,target=/var/lib/apt \
+-    apt update && apt install -y --no-install-recommends \
+-    ca-certificates \
+-    git \
+-    gosu \
+-    libglib2.0-0 \
+-    libgl1 \
+-    libglx-mesa0 \
+-    build-essential \
+-    libopencv-dev \
+-    libstdc++-10-dev \
+-    wget
+-
+-ENV \
+-    PYTHONUNBUFFERED=1 \
+-    PYTHONDONTWRITEBYTECODE=1 \
+-    VIRTUAL_ENV=/opt/venv \
+-    INVOKEAI_SRC=/opt/invokeai \
+-    PYTHON_VERSION=3.12 \
+-    UV_PYTHON=3.12 \
+-    UV_COMPILE_BYTECODE=1 \
+-    UV_MANAGED_PYTHON=1 \
+-    UV_LINK_MODE=copy \
+-    UV_PROJECT_ENVIRONMENT=/opt/venv \
+-    INVOKEAI_ROOT=/invokeai \
+-    INVOKEAI_HOST=0.0.0.0 \
+-    INVOKEAI_PORT=9090 \
+-    PATH="/opt/venv/bin:$PATH" \
+-    CONTAINER_UID=${CONTAINER_UID:-1000} \
+-    CONTAINER_GID=${CONTAINER_GID:-1000}
+-
+-ARG GPU_DRIVER=cuda
+-
+-# Install `uv` for package management
+-COPY --from=ghcr.io/astral-sh/uv:0.6.9 /uv /uvx /bin/
+-
+-# Install python & allow non-root user to use it by traversing the /root dir without read permissions
+-RUN --mount=type=cache,target=/root/.cache/uv \
+-    uv python install ${PYTHON_VERSION} && \
+-    # chmod --recursive a+rX /root/.local/share/uv/python
+-    chmod 711 /root
+-
+-WORKDIR ${INVOKEAI_SRC}
+-
+-# Install project's dependencies as a separate layer so they aren't rebuilt every commit.
+-# bind-mount instead of copy to defer adding sources to the image until next layer.
+-#
+-# NOTE: there are no pytorch builds for arm64 + cuda, only cpu
+-# x86_64/CUDA is the default
+-RUN --mount=type=cache,target=/root/.cache/uv \
+-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+-    --mount=type=bind,source=uv.lock,target=uv.lock \
+-    # this is just to get the package manager to recognize that the project exists, without making changes to the docker layer
+-    --mount=type=bind,source=invokeai/version,target=invokeai/version \
+-    ulimit -n 30000 && \
+-    uv sync --extra $GPU_DRIVER --frozen
+-
+-RUN --mount=type=cache,target=/var/cache/apt \
+-    --mount=type=cache,target=/var/lib/apt \
+-    if [ "$GPU_DRIVER" = "rocm" ]; then \
+-    wget -O /tmp/amdgpu-install.deb \
+-    https://repo.radeon.com/amdgpu-install/6.3.4/ubuntu/noble/amdgpu-install_6.3.60304-1_all.deb && \
+-    apt install -y /tmp/amdgpu-install.deb && \
+-    apt update && \
+-    amdgpu-install --usecase=rocm -y && \
+-    apt-get autoclean && \
+-    apt clean && \
+-    rm -rf /tmp/* /var/tmp/* && \
+-    usermod -a -G render ubuntu && \
+-    usermod -a -G video ubuntu && \
+-    echo "\\n/opt/rocm/lib\\n/opt/rocm/lib64" >> /etc/ld.so.conf.d/rocm.conf && \
+-    ldconfig && \
+-    update-alternatives --auto rocm; \
+-    fi
+-
+-## Heathen711: Leaving this for review input, will remove before merge
+-# RUN --mount=type=cache,target=/var/cache/apt \
+-#     --mount=type=cache,target=/var/lib/apt \
+-#     if [ "$GPU_DRIVER" = "rocm" ]; then \
+-#     groupadd render && \
+-#     usermod -a -G render ubuntu && \
+-#     usermod -a -G video ubuntu; \
+-#     fi
+-
+-## Link amdgpu.ids for ROCm builds
+-## contributed by https://github.com/Rubonnek
+-# RUN mkdir -p "/opt/amdgpu/share/libdrm" &&\
+-#     ln -s "/usr/share/libdrm/amdgpu.ids" "/opt/amdgpu/share/libdrm/amdgpu.ids"
+-
+-# build patchmatch
+-RUN cd /usr/lib/$(uname -p)-linux-gnu/pkgconfig/ && ln -sf opencv4.pc opencv.pc
+-RUN python -c "from patchmatch import patch_match"
+-
+-RUN mkdir -p ${INVOKEAI_ROOT} && chown -R ${CONTAINER_UID}:${CONTAINER_GID} ${INVOKEAI_ROOT}
+-
+-COPY docker/docker-entrypoint.sh ./
+-ENTRYPOINT ["/opt/invokeai/docker-entrypoint.sh"]
+-CMD ["invokeai-web"]
+-
+-# --link requires buldkit w/ dockerfile syntax 1.4, does not work with podman
+-COPY --link --from=web-builder /build/dist ${INVOKEAI_SRC}/invokeai/frontend/web/dist
+-
+-# add sources last to minimize image changes on code changes
+-COPY invokeai ${INVOKEAI_SRC}/invokeai
+-
+-# this should not increase image size because we've already installed dependencies
+-# in a previous layer
+-RUN --mount=type=cache,target=/root/.cache/uv \
+-    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+-    --mount=type=bind,source=uv.lock,target=uv.lock \
+-    ulimit -n 30000 && \
+-    uv pip install -e .[$GPU_DRIVER]
+-
+diff --git a/docker/README.md b/docker/README.md
+deleted file mode 100644
+index b9c7c010f4..0000000000
+--- a/docker/README.md
++++ /dev/null
+@@ -1,117 +0,0 @@
+-# Invoke in Docker
+-
+-First things first:
+-
+-- Ensure that Docker can use your [NVIDIA][nvidia docker docs] or [AMD][amd docker docs] GPU.
+-- This document assumes a Linux system, but should work similarly under Windows with WSL2.
+-- We don't recommend running Invoke in Docker on macOS at this time. It works, but very slowly.
+-
+-## Quickstart
+-
+-No `docker compose`, no persistence, single command, using the official images:
+-
+-**CUDA (NVIDIA GPU):**
+-
+-```bash
+-docker run --runtime=nvidia --gpus=all --publish 9090:9090 ghcr.io/invoke-ai/invokeai
+-```
+-
+-**ROCm (AMD GPU):**
+-
+-```bash
+-docker run --device /dev/kfd --device /dev/dri --publish 9090:9090 ghcr.io/invoke-ai/invokeai:main-rocm
+-```
+-
+-Open `http://localhost:9090` in your browser once the container finishes booting, install some models, and generate away!
+-
+-### Data persistence
+-
+-To persist your generated images and downloaded models outside of the container, add a `--volume/-v` flag to the above command, e.g.:
+-
+-```bash
+-docker run --volume /some/local/path:/invokeai {...etc...}
+-```
+-
+-`/some/local/path/invokeai` will contain all your data.
+-It can *usually* be reused between different installs of Invoke. Tread with caution and read the release notes!
+-
+-## Customize the container
+-
+-The included `run.sh` script is a convenience wrapper around `docker compose`. It can be helpful for passing additional build arguments to `docker compose`. Alternatively, the familiar `docker compose` commands work just as well.
+-
+-```bash
+-cd docker
+-cp .env.sample .env
+-# edit .env to your liking if you need to; it is well commented.
+-./run.sh
+-```
+-
+-It will take a few minutes to build the image the first time. Once the application starts up, open `http://localhost:9090` in your browser to invoke!
+-
+->[!TIP]
+->When using the `run.sh` script, the container will continue running after Ctrl+C. To shut it down, use the `docker compose down` command.
+-
+-## Docker setup in detail
+-
+-#### Linux
+-
+-1. Ensure buildkit is enabled in the Docker daemon settings (`/etc/docker/daemon.json`)
+-2. Install the `docker compose` plugin using your package manager, or follow a [tutorial](https://docs.docker.com/compose/install/linux/#install-using-the-repository).
+-    - The deprecated `docker-compose` (hyphenated) CLI probably won't work. Update to a recent version.
+-3. Ensure docker daemon is able to access the GPU.
+-    - [NVIDIA docs](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+-    - [AMD docs](https://rocm.docs.amd.com/projects/install-on-linux/en/latest/how-to/docker.html)
+-
+-#### macOS
+-
+-> [!TIP]
+-> You'll be better off installing Invoke directly on your system, because Docker can not use the GPU on macOS.
+-
+-If you are still reading:
+-
+-1. Ensure Docker has at least 16GB RAM
+-2. Enable VirtioFS for file sharing
+-3. Enable `docker compose` V2 support
+-
+-This is done via Docker Desktop preferences.
+-
+-### Configure the Invoke Environment
+-
+-1. Make a copy of `.env.sample` and name it `.env` (`cp .env.sample .env` (Mac/Linux) or `copy example.env .env` (Windows)). Make changes as necessary. Set `INVOKEAI_ROOT` to an absolute path to the desired location of the InvokeAI runtime directory. It may be an existing directory from a previous installation (post 4.0.0).
+-1. Execute `run.sh`
+-
+-The image will be built automatically if needed.
+-
+-The runtime directory (holding models and outputs) will be created in the location specified by `INVOKEAI_ROOT`. The default location is `~/invokeai`. Navigate to the Model Manager tab and install some models before generating.
+-
+-### Use a GPU
+-
+-- Linux is *recommended* for GPU support in Docker.
+-- WSL2 is *required* for Windows.
+-- only `x86_64` architecture is supported.
+-
+-The Docker daemon on the system must be already set up to use the GPU. In case of Linux, this involves installing `nvidia-docker-runtime` and configuring the `nvidia` runtime as default. Steps will be different for AMD. Please see Docker/NVIDIA/AMD documentation for the most up-to-date instructions for using your GPU with Docker.
+-
+-To use an AMD GPU, set `GPU_DRIVER=rocm` in your `.env` file before running `./run.sh`.
+-
+-## Customize
+-
+-Check the `.env.sample` file. It contains some environment variables for running in Docker. Copy it, name it `.env`, and fill it in with your own values. Next time you run `run.sh`, your custom values will be used.
+-
+-You can also set these values in `docker-compose.yml` directly, but `.env` will help avoid conflicts when code is updated.
+-
+-Values are optional, but setting `INVOKEAI_ROOT` is highly recommended. The default is `~/invokeai`. Example:
+-
+-```bash
+-INVOKEAI_ROOT=/Volumes/WorkDrive/invokeai
+-HUGGINGFACE_TOKEN=the_actual_token
+-CONTAINER_UID=1000
+-GPU_DRIVER=cuda
+-```
+-
+-Any environment variables supported by InvokeAI can be set here. See the [Configuration docs](https://invoke.ai/configuration/invokeai-yaml/) for further detail.
+-
+----
+-
+-[nvidia docker docs]: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
+-[amd docker docs]: https://rocm.docs.amd.com/projects/install-on-linux/en/latest/how-to/docker.html
+diff --git a/docker/docker-compose.yml b/docker/docker-compose.yml
+deleted file mode 100644
+index 2e5bc91f26..0000000000
+--- a/docker/docker-compose.yml
++++ /dev/null
+@@ -1,55 +0,0 @@
+-# Copyright (c) 2023 Eugene Brodsky https://github.com/ebr
+-
+-x-invokeai: &invokeai
+-    image: "ghcr.io/invoke-ai/invokeai:latest"
+-    build:
+-      context: ..
+-      dockerfile: docker/Dockerfile
+-
+-    # Create a .env file in the same directory as this docker-compose.yml file
+-    # and populate it with environment variables. See .env.sample
+-    env_file:
+-      - .env
+-
+-    # variables without a default will automatically inherit from the host environment
+-    environment:
+-      # if set, CONTAINER_INVOKEAI_ROOT will override the Invoke runtime directory location *inside* the container
+-      - INVOKEAI_ROOT=${CONTAINER_INVOKEAI_ROOT:-/invokeai}
+-      - HF_HOME
+-    ports:
+-      - "${INVOKEAI_PORT:-9090}:${INVOKEAI_PORT:-9090}"
+-    volumes:
+-      - type: bind
+-        source: ${HOST_INVOKEAI_ROOT:-${INVOKEAI_ROOT:-~/invokeai}}
+-        target: ${CONTAINER_INVOKEAI_ROOT:-/invokeai}
+-        bind:
+-          create_host_path: true
+-      - ${HF_HOME:-~/.cache/huggingface}:${HF_HOME:-/invokeai/.cache/huggingface}
+-    tty: true
+-    stdin_open: true
+-
+-
+-services:
+-  invokeai-cuda:
+-    <<: *invokeai
+-    deploy:
+-      resources:
+-        reservations:
+-          devices:
+-            - driver: nvidia
+-              count: 1
+-              capabilities: [gpu]
+-
+-  invokeai-cpu:
+-    <<: *invokeai
+-    profiles:
+-      - cpu
+-
+-  invokeai-rocm:
+-    <<: *invokeai
+-    environment:
+-      - AMD_VISIBLE_DEVICES=all
+-      - RENDER_GROUP_ID=${RENDER_GROUP_ID}
+-    runtime: amd
+-    profiles:
+-      - rocm
+diff --git a/docker/docker-entrypoint.sh b/docker/docker-entrypoint.sh
+deleted file mode 100755
+index 12f24a9352..0000000000
+--- a/docker/docker-entrypoint.sh
++++ /dev/null
+@@ -1,57 +0,0 @@
+-#!/bin/bash
+-set -e -o pipefail
+-
+-### Container entrypoint
+-# Runs the CMD as defined by the Dockerfile or passed to `docker run`
+-# Can be used to configure the runtime dir
+-# Bypass by using ENTRYPOINT or `--entrypoint`
+-
+-### Set INVOKEAI_ROOT pointing to a valid runtime directory
+-# Otherwise configure the runtime dir first.
+-
+-### Set the CONTAINER_UID envvar to match your user.
+-# Ensures files created in the container are owned by you:
+-#   docker run --rm -it -v /some/path:/invokeai -e CONTAINER_UID=$(id -u) <this image>
+-# Default UID: 1000 chosen due to popularity on Linux systems. Possibly 501 on MacOS.
+-
+-USER_ID=${CONTAINER_UID:-1000}
+-USER=ubuntu
+-# if the user does not exist, create it. It is expected to be present on ubuntu >=24.x
+-_=$(id ${USER} 2>&1) || useradd -u ${USER_ID} ${USER}
+-# ensure the UID is correct
+-usermod -u ${USER_ID} ${USER} 1>/dev/null
+-
+-## ROCM specific configuration
+-# render group within the container must match the host render group
+-# otherwise the container will not be able to access the host GPU.
+-if [[ -v "RENDER_GROUP_ID" ]] && [[ ! -z "${RENDER_GROUP_ID}" ]]; then
+-  # ensure the render group exists
+-  groupmod -g ${RENDER_GROUP_ID} render
+-  usermod -a -G render ${USER}
+-  usermod -a -G video ${USER}
+-fi
+-
+-
+-### Set the $PUBLIC_KEY env var to enable SSH access.
+-# We do not install openssh-server in the image by default to avoid bloat.
+-# but it is useful to have the full SSH server e.g. on Runpod.
+-# (use SCP to copy files to/from the image, etc)
+-if [[ -v "PUBLIC_KEY" ]] && [[ ! -d "${HOME}/.ssh" ]]; then
+-  apt-get update
+-  apt-get install -y openssh-server
+-  pushd "$HOME"
+-  mkdir -p .ssh
+-  echo "${PUBLIC_KEY}" >.ssh/authorized_keys
+-  chmod -R 700 .ssh
+-  popd
+-  service ssh start
+-fi
+-
+-mkdir -p "${INVOKEAI_ROOT}"
+-chown --recursive ${USER} "${INVOKEAI_ROOT}" || true
+-cd "${INVOKEAI_ROOT}"
+-export HF_HOME=${HF_HOME:-$INVOKEAI_ROOT/.cache/huggingface}
+-export MPLCONFIGDIR=${MPLCONFIGDIR:-$INVOKEAI_ROOT/.matplotlib}
+-
+-# Run the CMD as the Container User (not root).
+-exec gosu ${USER} "$@"
+diff --git a/docker/run.sh b/docker/run.sh
+deleted file mode 100755
+index 272d4e44a5..0000000000
+--- a/docker/run.sh
++++ /dev/null
+@@ -1,36 +0,0 @@
+-#!/usr/bin/env bash
+-set -e -o pipefail
+-
+-run() {
+-  local scriptdir=$(dirname "${BASH_SOURCE[0]}")
+-  cd "$scriptdir" || exit 1
+-
+-  local build_args=""
+-  local profile=""
+-
+-  # create .env file if it doesn't exist, otherwise docker compose will fail
+-  touch .env
+-
+-  # parse .env file for build args
+-  build_args=$(awk '$1 ~ /=[^$]/ && $0 !~ /^#/ {print "--build-arg " $0 " "}' .env) &&
+-  profile="$(awk -F '=' '/GPU_DRIVER=/ {print $2}' .env)"
+-
+-  # default to 'cuda' profile
+-  [[ -z "$profile" ]] && profile="cuda"
+-
+-  local service_name="invokeai-$profile"
+-
+-  if [[ ! -z "$build_args" ]]; then
+-    printf "%s\n" "docker compose build args:"
+-    printf "%s\n" "$build_args"
+-  fi
+-
+-  docker compose build $build_args $service_name
+-  unset build_args
+-
+-  printf "%s\n" "starting service $service_name"
+-  docker compose --profile "$profile" up -d "$service_name"
+-  docker compose --profile "$profile" logs -f
+-}
+-
+-run
+diff --git a/docker/runpod-readme.md b/docker/runpod-readme.md
+deleted file mode 100644
+index c464480d46..0000000000
+--- a/docker/runpod-readme.md
++++ /dev/null
+@@ -1,60 +0,0 @@
+-# InvokeAI - A Stable Diffusion Toolkit
+-
+-Stable Diffusion distribution by InvokeAI: https://github.com/invoke-ai
+-
+-The Docker image tracks the `main` branch of the InvokeAI project, which means it includes the latest features, but may contain some bugs.
+-
+-Your working directory is mounted under the `/workspace` path inside the pod. The models are in `/workspace/invokeai/models`, and outputs are in `/workspace/invokeai/outputs`.
+-
+-> **Only the /workspace directory will persist between pod restarts!**
+-
+-> **If you _terminate_ (not just _stop_) the pod, the /workspace will be lost.**
+-
+-## Quickstart
+-
+-1. Launch a pod from this template. **It will take about 5-10 minutes to run through the initial setup**. Be patient.
+-1. Wait for the application to load.
+-    - TIP: you know it's ready when the CPU usage goes idle
+-    - You can also check the logs for a line that says "_Point your browser at..._"
+-1. Open the Invoke AI web UI: click the `Connect` => `connect over  HTTP` button.
+-1. Generate some art!
+-
+-## Other things you can do
+-
+-At any point you may edit the pod configuration and set an arbitrary Docker command. For example, you could run a command to downloads some models using `curl`, or fetch some images and place them into your outputs to continue a working session.
+-
+-If you need to run *multiple commands*, define them in the Docker Command field like this:
+-
+-`bash -c "cd ${INVOKEAI_ROOT}/outputs; wormhole receive 2-foo-bar; invoke.py --web --host 0.0.0.0"`
+-
+-### Copying your data in and out of the pod
+-
+-This image includes a couple of handy tools to help you get the data into the pod (such as your custom models or embeddings), and out of the pod (such as downloading your outputs). Here are your options for getting your data in and out of the pod:
+-
+-- **SSH server**:
+-    1. Make sure to create and set your Public Key in the RunPod settings (follow the official instructions)
+-    1. Add an exposed port 22 (TCP) in the pod settings!
+-    1. When your pod restarts, you will see a new entry in the `Connect` dialog. Use this SSH server to `scp` or `sftp` your files as necessary, or SSH into the pod using the fully fledged SSH server.
+-
+-- [**Magic Wormhole**](https://magic-wormhole.readthedocs.io/en/latest/welcome.html):
+-    1. On your computer, `pip install magic-wormhole` (see above instructions for details)
+-    1. Connect to the command line **using the "light" SSH client** or the browser-based console. _Currently there's a bug where `wormhole` isn't available when connected to "full" SSH server, as described above_.
+-    1. `wormhole send /workspace/invokeai/outputs` will send the entire `outputs` directory. You can also send individual files.
+-    1. Once packaged, you will see a `wormhole receive <123-some-words>` command. Copy it
+-    1. Paste this command into the terminal on your local machine to securely download the payload.
+-    1. It works the same in reverse: you can `wormhole send` some models from your computer to the pod. Again, save your files somewhere in `/workspace` or they will be lost when the pod is stopped.
+-
+-- **RunPod's Cloud Sync feature** may be used to sync the persistent volume to cloud storage. You could, for example, copy the entire `/workspace` to S3, add some custom models to it, and copy it back from S3 when launching new pod configurations. Follow the Cloud Sync instructions.
+-
+-
+-### Disable the NSFW checker
+-
+-The NSFW checker is enabled by default. To disable it, edit the pod configuration and set the following command:
+-
+-```
+-invoke --web --host 0.0.0.0 --no-nsfw_checker
+-```
+-
+----
+-
+-Template ©2023 Eugene Brodsky [ebr](https://github.com/ebr)
+\ No newline at end of file
+diff --git a/invokeai/app/invocations/flux_denoise.py b/invokeai/app/invocations/flux_denoise.py
+index 1ad0cc559e..0edf75ff20 100644
+--- a/invokeai/app/invocations/flux_denoise.py
++++ b/invokeai/app/invocations/flux_denoise.py
+@@ -48,13 +48,21 @@ from invokeai.backend.flux.ip_adapter.xlabs_ip_adapter_flux import XlabsIpAdapte
+ from invokeai.backend.flux.model import Flux
+ from invokeai.backend.flux.sampling_utils import (
+     clip_timestep_schedule_fractional,
++    generate_flow_sigmas,
+     generate_img_ids,
+     get_noise,
+     get_schedule,
+     pack,
+     unpack,
+ )
+-from invokeai.backend.flux.schedulers import FLUX_SCHEDULER_LABELS, FLUX_SCHEDULER_MAP, FLUX_SCHEDULER_NAME_VALUES
++from invokeai.backend.flux.schedulers import (
++    FLUX_SCHEDULER_FACTORY,
++    FLUX_SCHEDULER_LABELS,
++    FLUX_SCHEDULER_MAP,
++    FLUX_SCHEDULER_NAME_VALUES,
++    FLUX_SIGMA_SCHEDULE_LABELS,
++    FLUX_SIGMA_SCHEDULE_VALUES,
++)
+ from invokeai.backend.flux.text_conditioning import FluxReduxConditioning, FluxTextConditioning
+ from invokeai.backend.model_manager.taxonomy import BaseModelType, FluxVariantType, ModelFormat, ModelType
+ from invokeai.backend.patches.layer_patcher import LayerPatcher
+@@ -71,7 +79,7 @@ from invokeai.backend.util.devices import TorchDevice
+     title="FLUX Denoise",
+     tags=["image", "flux"],
+     category="latents",
+-    version="4.5.1",
++    version="4.6.0",
+ )
+ class FluxDenoiseInvocation(BaseInvocation):
+     """Run denoising process with a FLUX transformer model."""
+@@ -146,6 +154,13 @@ class FluxDenoiseInvocation(BaseInvocation):
+         "'heun' is 2nd-order (better quality, 2x slower). 'lcm' is optimized for few steps.",
+         ui_choice_labels=FLUX_SCHEDULER_LABELS,
+     )
++    sigma_schedule: FLUX_SIGMA_SCHEDULE_VALUES = InputField(
++        default="simple",
++        description="Sigma schedule controls the distribution of noise levels across steps. "
++        "'simple' is linear. 'karras' and 'beta' concentrate steps at certain noise levels. "
++        "Match this to the model's recommended schedule for best results.",
++        ui_choice_labels=FLUX_SIGMA_SCHEDULE_LABELS,
++    )
+     guidance: float = InputField(
+         default=4.0,
+         description="The guidance strength. Higher values adhere more strictly to the prompt, and will produce less diverse images. FLUX dev only, ignored for schnell.",
+@@ -289,9 +304,14 @@ class FluxDenoiseInvocation(BaseInvocation):
+ 
+         # Create scheduler if not using default euler
+         scheduler = None
+-        if self.scheduler in FLUX_SCHEDULER_MAP:
+-            scheduler_class = FLUX_SCHEDULER_MAP[self.scheduler]
+-            scheduler = scheduler_class(num_train_timesteps=1000)
++        if self.scheduler in FLUX_SCHEDULER_FACTORY:
++            scheduler = FLUX_SCHEDULER_FACTORY[self.scheduler](num_train_timesteps=1000)
++        elif self.scheduler in FLUX_SCHEDULER_MAP:
++            scheduler = FLUX_SCHEDULER_MAP[self.scheduler](num_train_timesteps=1000)
++
++        # If using a non-default sigma schedule, generate custom sigmas and override the timestep schedule
++        if self.sigma_schedule != "simple":
++            timesteps = generate_flow_sigmas(self.num_steps, self.sigma_schedule)
+ 
+         # Clip the timesteps schedule based on denoising_start and denoising_end.
+         timesteps = clip_timestep_schedule_fractional(timesteps, self.denoising_start, self.denoising_end)
+diff --git a/invokeai/app/services/model_install/model_install_default.py b/invokeai/app/services/model_install/model_install_default.py
+index 49d3cfdf7f..6022e8d68f 100644
+--- a/invokeai/app/services/model_install/model_install_default.py
++++ b/invokeai/app/services/model_install/model_install_default.py
+@@ -1064,8 +1064,14 @@ class ModelInstallService(ModelInstallServiceBase):
+ 
+         info = info or self._probe(model_path, config)
+ 
+-        # Apply LoRA metadata if applicable
+         model_images_path = self.app_config.models_path / "model_images"
++
++        # Process preview image for all model types
++        from invokeai.backend.model_manager.util.lora_metadata_extractor import _process_preview_image
++
++        _process_preview_image(model_path.resolve().stem, model_path.resolve().parent, info.key, model_images_path)
++
++        # Apply LoRA-specific metadata (description, trigger phrases)
+         apply_lora_metadata(info, model_path.resolve(), model_images_path)
+ 
+         model_path = model_path.resolve()
+diff --git a/invokeai/app/services/object_serializer/object_serializer_disk.py b/invokeai/app/services/object_serializer/object_serializer_disk.py
+index bbd3f78550..10cc4fc04e 100644
+--- a/invokeai/app/services/object_serializer/object_serializer_disk.py
++++ b/invokeai/app/services/object_serializer/object_serializer_disk.py
+@@ -34,17 +34,16 @@ class ObjectSerializerDisk(ObjectSerializerBase[T]):
+         super().__init__()
+         self._ephemeral = ephemeral
+         self._base_output_dir = output_dir
++        self._tempdir: tempfile.TemporaryDirectory[str] | None = None
+         self._base_output_dir.mkdir(parents=True, exist_ok=True)
+ 
+         if self._ephemeral:
+             # Remove dangling tempdirs that might have been left over from an earlier unplanned shutdown.
+             for temp_dir in filter(Path.is_dir, self._base_output_dir.glob("tmp*")):
+-                shutil.rmtree(temp_dir)
++                shutil.rmtree(temp_dir, ignore_errors=True)
+ 
+         # Must specify `ignore_cleanup_errors` to avoid fatal errors during cleanup on Windows
+-        self._tempdir = (
+-            tempfile.TemporaryDirectory(dir=self._base_output_dir, ignore_cleanup_errors=True) if ephemeral else None
+-        )
++        self._tempdir = tempfile.TemporaryDirectory(dir=self._base_output_dir, ignore_cleanup_errors=True) if ephemeral else None
+         self._output_dir = Path(self._tempdir.name) if self._tempdir else self._base_output_dir
+         self.__obj_class_name: Optional[str] = None
+ 
+@@ -82,7 +81,7 @@ class ObjectSerializerDisk(ObjectSerializerBase[T]):
+ 
+     def _tempdir_cleanup(self) -> None:
+         """Calls `cleanup` on the temporary directory, if it exists."""
+-        if self._tempdir:
++        if getattr(self, "_tempdir", None):
+             self._tempdir.cleanup()
+ 
+     def __del__(self) -> None:
+diff --git a/invokeai/backend/flux/denoise.py b/invokeai/backend/flux/denoise.py
+index a0ae4cfb3f..089ae42d4b 100644
+--- a/invokeai/backend/flux/denoise.py
++++ b/invokeai/backend/flux/denoise.py
+@@ -54,11 +54,24 @@ def denoise(
+         is_lcm = scheduler.__class__.__name__ == "FlowMatchLCMScheduler"
+         set_timesteps_sig = inspect.signature(scheduler.set_timesteps)
+         if not is_lcm and "sigmas" in set_timesteps_sig.parameters:
+-            # Scheduler supports custom sigmas - use InvokeAI's time-shifted schedule
++            # Scheduler supports custom sigmas natively (Euler, UniPC)
+             scheduler.set_timesteps(sigmas=timesteps, device=img.device)
++        elif not is_lcm:
++            # Scheduler doesn't accept sigmas= (DPM++ 2M, DPM++ SDE, DEIS, Heun, SA-Solver, etc.)
++            # Initialize with num_inference_steps first, then override sigmas/timesteps
++            num_inference_steps = len(timesteps) - 1
++            scheduler.set_timesteps(num_inference_steps=num_inference_steps, device=img.device)
++            # Override the scheduler's sigmas and timesteps with our custom schedule
++            # Note: Some schedulers (DEIS, SA-Solver) use np.log() internally which requires
++            # CPU tensors. Keep sigmas/timesteps on CPU — scheduler.step() handles device transfer.
++            custom_sigmas = torch.tensor(timesteps, dtype=torch.float32, device="cpu")
++            scheduler.sigmas = custom_sigmas
++            # Convert sigmas [0,1] to timesteps [0, num_train_timesteps] for the scheduler
++            scheduler.timesteps = (custom_sigmas[:-1] * scheduler.config.num_train_timesteps).to(
++                dtype=torch.float32, device="cpu"
++            )
+         else:
+-            # LCM or scheduler doesn't support custom sigmas - use num_inference_steps
+-            # The schedule will be computed by the scheduler itself
++            # LCM has its own sigma schedule - use num_inference_steps
+             num_inference_steps = len(timesteps) - 1
+             scheduler.set_timesteps(num_inference_steps=num_inference_steps, device=img.device)
+ 
+diff --git a/invokeai/backend/flux/sampling_utils.py b/invokeai/backend/flux/sampling_utils.py
+index be81d6458d..6534629703 100644
+--- a/invokeai/backend/flux/sampling_utils.py
++++ b/invokeai/backend/flux/sampling_utils.py
+@@ -137,6 +137,78 @@ def clip_timestep_schedule_fractional(
+     return clipped_timesteps
+ 
+ 
++def generate_flow_sigmas(num_steps: int, schedule_type: str = "simple") -> list[float]:
++    """Generate a sigma schedule in [0, 1] range for flow matching models.
++
++    Args:
++        num_steps: Number of denoising steps.
++        schedule_type: Type of sigma schedule. One of:
++            - "simple": Linear spacing (default, ComfyUI "simple")
++            - "normal": Gaussian CDF schedule (ComfyUI "normal")
++            - "ddim_uniform": DDIM-style leading uniform spacing
++            - "karras": Karras schedule (concentrates steps at low noise)
++            - "beta": Beta distribution schedule (concentrates steps at both ends)
++            - "exponential": Exponential decay schedule
++            - "sgm_uniform": Uniform spacing in sigma space
++
++    Returns:
++        list[float]: Sigma schedule from ~1.0 to 0.0 with num_steps+1 entries.
++    """
++    import numpy as np
++
++    if schedule_type == "simple":
++        # Linear spacing from 1 to 0 (ComfyUI "simple")
++        sigmas = np.linspace(1.0, 0.0, num_steps + 1)
++    elif schedule_type == "normal":
++        # Gaussian CDF schedule (ComfyUI "normal")
++        from scipy import stats
++
++        x = np.linspace(0, 1, num_steps + 1)
++        sigmas = 1.0 - stats.norm.cdf(x, loc=0.5, scale=0.15)
++        # Normalize to start at ~1.0 and end at ~0.0
++        sigmas = (sigmas - sigmas[-1]) / (sigmas[0] - sigmas[-1])
++    elif schedule_type == "ddim_uniform":
++        # DDIM-style leading uniform spacing
++        num_train = 1000
++        step_ratio = num_train // num_steps
++        timesteps = np.arange(0, num_steps) * step_ratio + 1  # [1, 51, 101, ..., 951]
++        timesteps = np.flip(timesteps)  # descending [951, 901, ..., 1]
++        sigmas = timesteps / num_train  # [0.951, 0.901, ..., 0.001]
++        sigmas = np.append(sigmas, 0.0)  # terminal sigma
++    elif schedule_type == "karras":
++        # Karras schedule adapted for [0, 1] range
++        rho = 7.0
++        sigma_min = 0.001
++        sigma_max = 1.0
++        ramp = np.linspace(0, 1, num_steps + 1)
++        min_inv_rho = sigma_min ** (1.0 / rho)
++        max_inv_rho = sigma_max ** (1.0 / rho)
++        sigmas = (max_inv_rho + ramp * (min_inv_rho - max_inv_rho)) ** rho
++    elif schedule_type == "beta":
++        # Beta distribution CDF schedule
++        from scipy import stats
++
++        alpha = 0.6
++        beta_param = 0.6
++        x = np.linspace(0, 1, num_steps + 1)
++        sigmas = 1.0 - stats.beta.cdf(x, alpha, beta_param)
++    elif schedule_type == "exponential":
++        # Exponential decay in [0, 1]
++        sigma_min = 0.001
++        sigma_max = 1.0
++        sigmas = np.exp(np.linspace(math.log(sigma_max), math.log(sigma_min), num_steps + 1))
++        # Append 0.0 as final value and trim to num_steps+1
++        sigmas = np.append(sigmas[:-1], 0.0)
++    elif schedule_type == "sgm_uniform":
++        # SGM uniform: uniform spacing in timestep space (like ComfyUI's sgm_uniform)
++        timesteps = np.linspace(1.0, 0.0, num_steps + 1)
++        sigmas = timesteps  # For flow matching, sigmas == timesteps in [0, 1]
++    else:
++        raise ValueError(f"Unknown sigma schedule type: {schedule_type}")
++
++    return sigmas.tolist()
++
++
+ def unpack(x: torch.Tensor, height: int, width: int) -> torch.Tensor:
+     """Unpack flat array of patch embeddings to latent image."""
+     return rearrange(
+diff --git a/invokeai/backend/flux/schedulers.py b/invokeai/backend/flux/schedulers.py
+index 05e6bb085f..ead8516c7a 100644
+--- a/invokeai/backend/flux/schedulers.py
++++ b/invokeai/backend/flux/schedulers.py
+@@ -7,8 +7,13 @@ This module provides the scheduler types and mapping for Flow Matching models
+ from typing import Literal, Type
+ 
+ from diffusers import (
++    DEISMultistepScheduler,
++    DPMSolverMultistepScheduler,
++    DPMSolverSinglestepScheduler,
+     FlowMatchEulerDiscreteScheduler,
+     FlowMatchHeunDiscreteScheduler,
++    SASolverScheduler,
++    UniPCMultistepScheduler,
+ )
+ from diffusers.schedulers.scheduling_utils import SchedulerMixin
+ 
+@@ -20,17 +25,59 @@ try:
+ except ImportError:
+     _HAS_LCM = False
+ 
++# Common kwargs for non-flow-native schedulers to work with flow matching models
++_FLOW_MATCHING_KWARGS = {
++    "prediction_type": "flow_prediction",
++    "use_flow_sigmas": True,
++    "flow_shift": 1.0,
++}
++
+ # Scheduler name literal type for type checking
+-FLUX_SCHEDULER_NAME_VALUES = Literal["euler", "heun", "lcm"]
++FLUX_SCHEDULER_NAME_VALUES = Literal[
++    "euler", "heun", "lcm", "dpmpp_2m", "dpmpp_2m_sde", "dpmpp_sde", "uni_pc", "deis", "sa_solver"
++]
+ 
+ # Human-readable labels for the UI
+ FLUX_SCHEDULER_LABELS: dict[str, str] = {
+     "euler": "Euler",
+     "heun": "Heun (2nd order)",
+     "lcm": "LCM",
++    "dpmpp_2m": "DPM++ 2M",
++    "dpmpp_2m_sde": "DPM++ 2M SDE",
++    "dpmpp_sde": "DPM++ SDE",
++    "uni_pc": "UniPC",
++    "deis": "DEIS",
++    "sa_solver": "SA-Solver PECE",
+ }
+ 
+-# Mapping from scheduler names to scheduler classes
++
++# Factory functions for schedulers that need flow matching config
++def _make_dpmpp_2m(**kwargs: object) -> DPMSolverMultistepScheduler:
++    return DPMSolverMultistepScheduler(algorithm_type="dpmsolver++", **_FLOW_MATCHING_KWARGS, **kwargs)
++
++
++def _make_dpmpp_2m_sde(**kwargs: object) -> DPMSolverMultistepScheduler:
++    return DPMSolverMultistepScheduler(algorithm_type="sde-dpmsolver++", **_FLOW_MATCHING_KWARGS, **kwargs)
++
++
++def _make_dpmpp_sde(**kwargs: object) -> DPMSolverSinglestepScheduler:
++    return DPMSolverSinglestepScheduler(algorithm_type="sde-dpmsolver++", **_FLOW_MATCHING_KWARGS, **kwargs)
++
++
++def _make_uni_pc(**kwargs: object) -> UniPCMultistepScheduler:
++    return UniPCMultistepScheduler(**_FLOW_MATCHING_KWARGS, **kwargs)
++
++
++def _make_deis(**kwargs: object) -> DEISMultistepScheduler:
++    return DEISMultistepScheduler(**_FLOW_MATCHING_KWARGS, **kwargs)
++
++
++def _make_sa_solver(**kwargs: object) -> SASolverScheduler:
++    return SASolverScheduler(**_FLOW_MATCHING_KWARGS, **kwargs)
++
++
++# Mapping from scheduler names to scheduler classes.
++# Entries are either a class (instantiated with just num_train_timesteps) or kept in FLUX_SCHEDULER_FACTORY.
+ FLUX_SCHEDULER_MAP: dict[str, Type[SchedulerMixin]] = {
+     "euler": FlowMatchEulerDiscreteScheduler,
+     "heun": FlowMatchHeunDiscreteScheduler,
+@@ -39,6 +86,29 @@ FLUX_SCHEDULER_MAP: dict[str, Type[SchedulerMixin]] = {
+ if _HAS_LCM:
+     FLUX_SCHEDULER_MAP["lcm"] = FlowMatchLCMScheduler
+ 
++# Factory map for schedulers that need extra config beyond num_train_timesteps
++FLUX_SCHEDULER_FACTORY: dict[str, callable] = {
++    "dpmpp_2m": _make_dpmpp_2m,
++    "dpmpp_2m_sde": _make_dpmpp_2m_sde,
++    "dpmpp_sde": _make_dpmpp_sde,
++    "uni_pc": _make_uni_pc,
++    "deis": _make_deis,
++    "sa_solver": _make_sa_solver,
++}
++
++# Sigma schedule types for controlling timestep distribution
++FLUX_SIGMA_SCHEDULE_VALUES = Literal["simple", "normal", "ddim_uniform", "karras", "beta", "exponential", "sgm_uniform"]
++
++FLUX_SIGMA_SCHEDULE_LABELS: dict[str, str] = {
++    "simple": "Simple",
++    "normal": "Normal",
++    "ddim_uniform": "DDIM Uniform",
++    "karras": "Karras",
++    "beta": "Beta",
++    "exponential": "Exponential",
++    "sgm_uniform": "SGM Uniform",
++}
++
+ 
+ # Z-Image scheduler types (Flow Matching schedulers)
+ # Note: Z-Image-Turbo is optimized for ~8 steps with Euler, LCM can also work.
+diff --git a/invokeai/backend/model_manager/configs/main.py b/invokeai/backend/model_manager/configs/main.py
+index da5bc5eed3..6f3469f370 100644
+--- a/invokeai/backend/model_manager/configs/main.py
++++ b/invokeai/backend/model_manager/configs/main.py
+@@ -34,6 +34,7 @@ from invokeai.backend.model_manager.taxonomy import (
+     ZImageVariantType,
+ )
+ from invokeai.backend.quantization.gguf.ggml_tensor import GGMLTensor
++from invokeai.backend.flux.schedulers import FLUX_SCHEDULER_NAME_VALUES, FLUX_SIGMA_SCHEDULE_VALUES
+ from invokeai.backend.stable_diffusion.schedulers.schedulers import SCHEDULER_NAME_VALUES
+ 
+ DEFAULTS_PRECISION = Literal["fp16", "fp32"]
+@@ -43,6 +44,12 @@ class MainModelDefaultSettings(BaseModel):
+     vae: str | None = Field(default=None, description="Default VAE for this model (model key)")
+     vae_precision: DEFAULTS_PRECISION | None = Field(default=None, description="Default VAE precision for this model")
+     scheduler: SCHEDULER_NAME_VALUES | None = Field(default=None, description="Default scheduler for this model")
++    flux_sampler: FLUX_SCHEDULER_NAME_VALUES | None = Field(
++        default=None, description="Default sampler for Flux models (e.g. euler, dpmpp_2m)"
++    )
++    flux_scheduler: FLUX_SIGMA_SCHEDULE_VALUES | None = Field(
++        default=None, description="Default scheduler (sigma schedule) for Flux models (e.g. normal, beta, karras)"
++    )
+     steps: int | None = Field(default=None, gt=0, description="Default number of steps for this model")
+     cfg_scale: float | None = Field(default=None, ge=1, description="Default CFG Scale for this model")
+     cfg_rescale_multiplier: float | None = Field(
+@@ -492,6 +499,9 @@ class Main_Checkpoint_FLUX_Config(Checkpoint_Config_Base, Main_Config_Base, Conf
+             {
+                 "double_blocks.0.img_attn.norm.key_norm.scale",
+                 "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale",
++                # Some checkpoints use .weight instead of .scale for RMSNorm layers
++                "double_blocks.0.img_attn.norm.key_norm.weight",
++                "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.weight",
+             },
+         ):
+             raise NotAMatchError("state dict does not look like a FLUX checkpoint")
+diff --git a/invokeai/backend/model_manager/load/model_loaders/flux.py b/invokeai/backend/model_manager/load/model_loaders/flux.py
+index c802154797..79bc9cd9e0 100644
+--- a/invokeai/backend/model_manager/load/model_loaders/flux.py
++++ b/invokeai/backend/model_manager/load/model_loaders/flux.py
+@@ -533,8 +533,15 @@ class FluxCheckpointModel(ModelLoader):
+             model = Flux(get_flux_transformers_params(config.variant))
+ 
+         sd = load_file(model_path)
+-        if "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale" in sd:
++        # Detect bundle format: some checkpoints use .scale, others use .weight for norm keys
++        if (
++            "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale" in sd
++            or "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.weight" in sd
++        ):
+             sd = convert_bundle_to_flux_transformer_checkpoint(sd)
++        # Remove FP8 scaling metadata that some checkpoints include but the Flux model doesn't use.
++        fp8_keys = {"scaled_fp8"}
++        sd = {k: v for k, v in sd.items() if k not in fp8_keys and not k.endswith((".scale_input", ".scale_weight"))}
+         new_sd_size = sum([ten.nelement() * torch.bfloat16.itemsize for ten in sd.values()])
+         self._ram_cache.make_room(new_sd_size)
+         for k in sd.keys():
+@@ -626,7 +633,10 @@ class FluxBnbQuantizednf4bCheckpointModel(ModelLoader):
+                 model = Flux(get_flux_transformers_params(config.variant))
+                 model = quantize_model_nf4(model, modules_to_not_convert=set(), compute_dtype=torch.bfloat16)
+             sd = load_file(model_path)
+-            if "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale" in sd:
++            if (
++                "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale" in sd
++                or "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.weight" in sd
++            ):
+                 sd = convert_bundle_to_flux_transformer_checkpoint(sd)
+             model.load_state_dict(sd, assign=True)
+         return model
+diff --git a/invokeai/backend/model_manager/util/model_util.py b/invokeai/backend/model_manager/util/model_util.py
+index c153129353..629d3e37d7 100644
+--- a/invokeai/backend/model_manager/util/model_util.py
++++ b/invokeai/backend/model_manager/util/model_util.py
+@@ -177,6 +177,10 @@ def convert_bundle_to_flux_transformer_checkpoint(
+             # support limitations at inference time
+             v = v.to(dtype=torch.bfloat16)
+         new_key = k.replace("model.diffusion_model.", "")
++        # Some checkpoints use .weight instead of .scale for RMSNorm layers — rename to match model
++        if new_key.endswith((".query_norm.weight", ".key_norm.weight")):
++            new_key = new_key[:-7] + ".scale"  # replace trailing ".weight" with ".scale"
++            v = v.to(dtype=torch.bfloat16)
+         original_state_dict[new_key] = v
+         keys_to_remove.append(k)
+ 
+diff --git a/invokeai/frontend/web/public/locales/en.json b/invokeai/frontend/web/public/locales/en.json
+index aa3a256f84..2309d993dd 100644
+--- a/invokeai/frontend/web/public/locales/en.json
++++ b/invokeai/frontend/web/public/locales/en.json
+@@ -1027,6 +1027,7 @@
+         "recallParameters": "Recall Parameters",
+         "recallParameter": "Recall {{label}}",
+         "scheduler": "Scheduler",
++        "sigmaSchedule": "Sigma Schedule",
+         "seamlessXAxis": "Seamless X Axis",
+         "seamlessYAxis": "Seamless Y Axis",
+         "seedVarianceEnabled": "Seed Variance Enabled",
+diff --git a/invokeai/frontend/web/src/app/store/middleware/listenerMiddleware/listeners/setDefaultSettings.ts b/invokeai/frontend/web/src/app/store/middleware/listenerMiddleware/listeners/setDefaultSettings.ts
+index 1ebad3a069..6b95323ce9 100644
+--- a/invokeai/frontend/web/src/app/store/middleware/listenerMiddleware/listeners/setDefaultSettings.ts
++++ b/invokeai/frontend/web/src/app/store/middleware/listenerMiddleware/listeners/setDefaultSettings.ts
+@@ -6,6 +6,8 @@ import {
+   heightChanged,
+   setCfgRescaleMultiplier,
+   setCfgScale,
++  setFluxScheduler,
++  setFluxSigmaSchedule,
+   setGuidance,
+   setScheduler,
+   setSteps,
+@@ -17,6 +19,8 @@ import { setDefaultSettings } from 'features/parameters/store/actions';
+ import {
+   isParameterCFGRescaleMultiplier,
+   isParameterCFGScale,
++  isParameterFluxScheduler,
++  isParameterFluxSigmaSchedule,
+   isParameterGuidance,
+   isParameterHeight,
+   isParameterPrecision,
+@@ -54,7 +58,7 @@ export const addSetDefaultSettingsListener = (startAppListening: AppStartListeni
+       }
+ 
+       if (isNonRefinerMainModelConfig(modelConfig) && modelConfig.default_settings) {
+-        const { vae, vae_precision, cfg_scale, cfg_rescale_multiplier, steps, scheduler, width, height, guidance } =
++        const { vae, vae_precision, cfg_scale, cfg_rescale_multiplier, steps, scheduler, width, height, guidance, flux_sampler, flux_scheduler } =
+           modelConfig.default_settings;
+ 
+         if (vae) {
+@@ -113,6 +117,19 @@ export const addSetDefaultSettingsListener = (startAppListening: AppStartListeni
+             dispatch(setScheduler(scheduler));
+           }
+         }
++
++        if (flux_sampler) {
++          if (isParameterFluxScheduler(flux_sampler)) {
++            dispatch(setFluxScheduler(flux_sampler));
++          }
++        }
++
++        if (flux_scheduler) {
++          if (isParameterFluxSigmaSchedule(flux_scheduler)) {
++            dispatch(setFluxSigmaSchedule(flux_scheduler));
++          }
++        }
++
+         const setSizeOptions = { updateAspectRatio: true, clamp: true };
+ 
+         const isStaging = buildSelectIsStaging(selectCanvasSessionId(state))(state);
+diff --git a/invokeai/frontend/web/src/features/controlLayers/store/paramsSlice.ts b/invokeai/frontend/web/src/features/controlLayers/store/paramsSlice.ts
+index 25670b28df..2111d9a84c 100644
+--- a/invokeai/frontend/web/src/features/controlLayers/store/paramsSlice.ts
++++ b/invokeai/frontend/web/src/features/controlLayers/store/paramsSlice.ts
+@@ -32,6 +32,8 @@ import type {
+   ParameterCLIPLEmbedModel,
+   ParameterControlLoRAModel,
+   ParameterFluxDypePreset,
++  ParameterFluxScheduler,
++  ParameterFluxSigmaSchedule,
+   ParameterGuidance,
+   ParameterModel,
+   ParameterNegativePrompt,
+@@ -74,9 +76,12 @@ const slice = createSlice({
+     setScheduler: (state, action: PayloadAction<ParameterScheduler>) => {
+       state.scheduler = action.payload;
+     },
+-    setFluxScheduler: (state, action: PayloadAction<'euler' | 'heun' | 'lcm'>) => {
++    setFluxScheduler: (state, action: PayloadAction<ParameterFluxScheduler>) => {
+       state.fluxScheduler = action.payload;
+     },
++    setFluxSigmaSchedule: (state, action: PayloadAction<ParameterFluxSigmaSchedule>) => {
++      state.fluxSigmaSchedule = action.payload;
++    },
+     setFluxDypePreset: (state, action: PayloadAction<ParameterFluxDypePreset>) => {
+       state.fluxDypePreset = action.payload;
+     },
+@@ -598,6 +603,7 @@ export const {
+   setGuidance,
+   setScheduler,
+   setFluxScheduler,
++  setFluxSigmaSchedule,
+   setFluxDypePreset,
+   setFluxDypeScale,
+   setFluxDypeExponent,
+@@ -847,6 +853,7 @@ export const selectSeedControl = createSelector(selectModelConfig, (modelConfig)
+ });
+ export const selectScheduler = createParamsSelector((params) => params.scheduler);
+ export const selectFluxScheduler = createParamsSelector((params) => params.fluxScheduler);
++export const selectFluxSigmaSchedule = createParamsSelector((params) => params.fluxSigmaSchedule);
+ export const selectFluxDypePreset = createParamsSelector((params) => params.fluxDypePreset);
+ export const selectFluxDypeScale = createParamsSelector((params) => params.fluxDypeScale);
+ export const selectFluxDypeExponent = createParamsSelector((params) => params.fluxDypeExponent);
+diff --git a/invokeai/frontend/web/src/features/controlLayers/store/types.ts b/invokeai/frontend/web/src/features/controlLayers/store/types.ts
+index dff1981b44..dfe51669e4 100644
+--- a/invokeai/frontend/web/src/features/controlLayers/store/types.ts
++++ b/invokeai/frontend/web/src/features/controlLayers/store/types.ts
+@@ -13,6 +13,7 @@ import {
+   zParameterFluxDypePreset,
+   zParameterFluxDypeScale,
+   zParameterFluxScheduler,
++  zParameterFluxSigmaSchedule,
+   zParameterGuidance,
+   zParameterImageDimension,
+   zParameterMaskBlurMethod,
+@@ -767,6 +768,7 @@ export const zParamsState = z.object({
+   iterations: z.number(),
+   scheduler: zParameterScheduler,
+   fluxScheduler: zParameterFluxScheduler,
++  fluxSigmaSchedule: zParameterFluxSigmaSchedule,
+   fluxDypePreset: zParameterFluxDypePreset,
+   fluxDypeScale: zParameterFluxDypeScale,
+   fluxDypeExponent: zParameterFluxDypeExponent,
+@@ -850,6 +852,7 @@ export const getInitialParamsState = (): ParamsState => ({
+   iterations: 1,
+   scheduler: 'dpmpp_3m_k',
+   fluxScheduler: 'euler',
++  fluxSigmaSchedule: 'simple',
+   fluxDypePreset: 'off',
+   fluxDypeScale: 2.0,
+   fluxDypeExponent: 2.0,
+diff --git a/invokeai/frontend/web/src/features/gallery/components/ImageMetadataViewer/ImageMetadataActions.tsx b/invokeai/frontend/web/src/features/gallery/components/ImageMetadataViewer/ImageMetadataActions.tsx
+index 105ad3dfd6..98ae1894c5 100644
+--- a/invokeai/frontend/web/src/features/gallery/components/ImageMetadataViewer/ImageMetadataActions.tsx
++++ b/invokeai/frontend/web/src/features/gallery/components/ImageMetadataViewer/ImageMetadataActions.tsx
+@@ -41,6 +41,7 @@ export const ImageMetadataActions = memo((props: Props) => {
+       <SingleMetadataDatum metadata={metadata} handler={ImageMetadataHandlers.Seed} />
+       <SingleMetadataDatum metadata={metadata} handler={ImageMetadataHandlers.Steps} />
+       <SingleMetadataDatum metadata={metadata} handler={ImageMetadataHandlers.Scheduler} />
++      <SingleMetadataDatum metadata={metadata} handler={ImageMetadataHandlers.FluxSigmaSchedule} />
+       <SingleMetadataDatum metadata={metadata} handler={ImageMetadataHandlers.CLIPSkip} />
+       <SingleMetadataDatum metadata={metadata} handler={ImageMetadataHandlers.CFGScale} />
+       <SingleMetadataDatum metadata={metadata} handler={ImageMetadataHandlers.CFGRescaleMultiplier} />
+diff --git a/invokeai/frontend/web/src/features/metadata/parsing.tsx b/invokeai/frontend/web/src/features/metadata/parsing.tsx
+index cf55f37810..17a72ca033 100644
+--- a/invokeai/frontend/web/src/features/metadata/parsing.tsx
++++ b/invokeai/frontend/web/src/features/metadata/parsing.tsx
+@@ -34,6 +34,7 @@ import {
+   setFluxDypePreset,
+   setFluxDypeScale,
+   setFluxScheduler,
++  setFluxSigmaSchedule,
+   setGuidance,
+   setImg2imgStrength,
+   setRefinerCFGScale,
+@@ -91,6 +92,8 @@ import type {
+   ParameterWidth,
+ } from 'features/parameters/types/parameterSchemas';
+ import {
++  isParameterFluxScheduler,
++  isParameterFluxSigmaSchedule,
+   zLoRAWeight,
+   zParameterCFGRescaleMultiplier,
+   zParameterCFGScale,
+@@ -484,8 +487,8 @@ const Scheduler: SingleMetadataHandler<ParameterScheduler> = {
+     // Dispatch to the appropriate scheduler based on the current model base
+     const base = selectBase(store.getState());
+     if (base === 'flux' || base === 'flux2') {
+-      // Flux and Flux2 (Klein) only support euler, heun, lcm
+-      if (value === 'euler' || value === 'heun' || value === 'lcm') {
++      // Flux and Flux2 (Klein) support expanded scheduler list
++      if (isParameterFluxScheduler(value)) {
+         store.dispatch(setFluxScheduler(value));
+       }
+     } else if (base === 'z-image') {
+@@ -509,6 +512,28 @@ const Scheduler: SingleMetadataHandler<ParameterScheduler> = {
+ };
+ //#endregion Scheduler
+ 
++//#region FluxSigmaSchedule
++const FluxSigmaSchedule: SingleMetadataHandler<string> = {
++  [SingleMetadataKey]: true,
++  type: 'FluxSigmaSchedule',
++  parse: (metadata, _store) => {
++    const raw = getProperty(metadata, 'sigma_schedule');
++    if (typeof raw !== 'string') {
++      throw new Error('sigma_schedule is not a string');
++    }
++    return Promise.resolve(raw);
++  },
++  recall: (value, store) => {
++    if (isParameterFluxSigmaSchedule(value)) {
++      store.dispatch(setFluxSigmaSchedule(value));
++    }
++  },
++  i18nKey: 'metadata.sigmaSchedule',
++  LabelComponent: MetadataLabel,
++  ValueComponent: ({ value }: SingleMetadataValueProps<string>) => <MetadataPrimitiveValue value={value} />,
++};
++//#endregion FluxSigmaSchedule
++
+ //#region Width
+ const Width: SingleMetadataHandler<ParameterWidth> = {
+   [SingleMetadataKey]: true,
+@@ -1513,6 +1538,7 @@ export const ImageMetadataHandlers = {
+   MainModel,
+   // Scheduler must be after MainModel so that base-dependent logic (z-image scheduler) works correctly
+   Scheduler,
++  FluxSigmaSchedule,
+   VAEModel,
+   Qwen3EncoderModel,
+   ZImageVAEModel,
+diff --git a/invokeai/frontend/web/src/features/modelManagerV2/hooks/useMainModelDefaultSettings.ts b/invokeai/frontend/web/src/features/modelManagerV2/hooks/useMainModelDefaultSettings.ts
+index dfab2d251f..4740e67189 100644
+--- a/invokeai/frontend/web/src/features/modelManagerV2/hooks/useMainModelDefaultSettings.ts
++++ b/invokeai/frontend/web/src/features/modelManagerV2/hooks/useMainModelDefaultSettings.ts
+@@ -41,6 +41,14 @@ export const useMainModelDefaultSettings = (modelConfig: MainModelConfig) => {
+         isEnabled: !isNil(modelConfig?.default_settings?.guidance),
+         value: modelConfig?.default_settings?.guidance ?? 4,
+       },
++      fluxSampler: {
++        isEnabled: !isNil(modelConfig?.default_settings?.flux_sampler),
++        value: modelConfig?.default_settings?.flux_sampler ?? 'euler',
++      },
++      fluxScheduler: {
++        isEnabled: !isNil(modelConfig?.default_settings?.flux_scheduler),
++        value: modelConfig?.default_settings?.flux_scheduler ?? 'simple',
++      },
+     };
+   }, [modelConfig]);
+ 
+diff --git a/invokeai/frontend/web/src/features/modelManagerV2/subpanels/ModelPanel/MainModelDefaultSettings/MainModelDefaultSettings.tsx b/invokeai/frontend/web/src/features/modelManagerV2/subpanels/ModelPanel/MainModelDefaultSettings/MainModelDefaultSettings.tsx
+index dd944897b2..f47c035db1 100644
+--- a/invokeai/frontend/web/src/features/modelManagerV2/subpanels/ModelPanel/MainModelDefaultSettings/MainModelDefaultSettings.tsx
++++ b/invokeai/frontend/web/src/features/modelManagerV2/subpanels/ModelPanel/MainModelDefaultSettings/MainModelDefaultSettings.tsx
+@@ -5,7 +5,7 @@ import { useMainModelDefaultSettings } from 'features/modelManagerV2/hooks/useMa
+ import { selectSelectedModelKey } from 'features/modelManagerV2/store/modelManagerV2Slice';
+ import { DefaultHeight } from 'features/modelManagerV2/subpanels/ModelPanel/MainModelDefaultSettings/DefaultHeight';
+ import { DefaultWidth } from 'features/modelManagerV2/subpanels/ModelPanel/MainModelDefaultSettings/DefaultWidth';
+-import type { ParameterScheduler } from 'features/parameters/types/parameterSchemas';
++import type { ParameterFluxScheduler, ParameterFluxSigmaSchedule, ParameterScheduler } from 'features/parameters/types/parameterSchemas';
+ import { getOptimalDimension } from 'features/parameters/util/optimalDimension';
+ import { toast } from 'features/toast/toast';
+ import { memo, useCallback, useEffect, useMemo } from 'react';
+@@ -18,6 +18,8 @@ import type { MainModelConfig } from 'services/api/types';
+ 
+ import { DefaultCfgRescaleMultiplier } from './DefaultCfgRescaleMultiplier';
+ import { DefaultCfgScale } from './DefaultCfgScale';
++import { DefaultFluxSampler } from './DefaultFluxSampler';
++import { DefaultFluxScheduler } from './DefaultFluxScheduler';
+ import { DefaultGuidance } from './DefaultGuidance';
+ import { DefaultScheduler } from './DefaultScheduler';
+ import { DefaultSteps } from './DefaultSteps';
+@@ -39,6 +41,8 @@ export type MainModelDefaultSettingsFormData = {
+   width: FormField<number>;
+   height: FormField<number>;
+   guidance: FormField<number>;
++  fluxSampler: FormField<ParameterFluxScheduler>;
++  fluxScheduler: FormField<ParameterFluxSigmaSchedule>;
+ };
+ 
+ type Props = {
+@@ -85,6 +89,8 @@ export const MainModelDefaultSettings = memo(({ modelConfig }: Props) => {
+         width: data.width.isEnabled ? data.width.value : null,
+         height: data.height.isEnabled ? data.height.value : null,
+         guidance: data.guidance.isEnabled ? data.guidance.value : null,
++        flux_sampler: data.fluxSampler.isEnabled ? data.fluxSampler.value : null,
++        flux_scheduler: data.fluxScheduler.isEnabled ? data.fluxScheduler.value : null,
+       };
+ 
+       updateModel({
+@@ -136,6 +142,8 @@ export const MainModelDefaultSettings = memo(({ modelConfig }: Props) => {
+         {!isFluxFamily && <DefaultVaePrecision control={control} name="vaePrecision" />}
+         {!isFluxFamily && <DefaultScheduler control={control} name="scheduler" />}
+         <DefaultSteps control={control} name="steps" />
++        {isFluxFamily && <DefaultFluxSampler control={control} name="fluxSampler" />}
++        {isFluxFamily && <DefaultFluxScheduler control={control} name="fluxScheduler" />}
+         {isFluxFamily && <DefaultGuidance control={control} name="guidance" />}
+         {!isFluxFamily && <DefaultCfgScale control={control} name="cfgScale" />}
+         {!isFluxFamily && <DefaultCfgRescaleMultiplier control={control} name="cfgRescaleMultiplier" />}
+diff --git a/invokeai/frontend/web/src/features/nodes/types/common.ts b/invokeai/frontend/web/src/features/nodes/types/common.ts
+index ba527df035..d3cd5eb029 100644
+--- a/invokeai/frontend/web/src/features/nodes/types/common.ts
++++ b/invokeai/frontend/web/src/features/nodes/types/common.ts
+@@ -66,7 +66,20 @@ export const zSchedulerField = z.enum([
+ export type SchedulerField = z.infer<typeof zSchedulerField>;
+ 
+ // Flux-specific scheduler options (Flow Matching schedulers)
+-export const zFluxSchedulerField = z.enum(['euler', 'heun', 'lcm']);
++export const zFluxSchedulerField = z.enum([
++  'euler',
++  'heun',
++  'lcm',
++  'dpmpp_2m',
++  'dpmpp_2m_sde',
++  'dpmpp_sde',
++  'uni_pc',
++  'deis',
++  'sa_solver',
++]);
++
++// Flux sigma schedule options (how sigmas are distributed across timesteps)
++export const zFluxSigmaScheduleField = z.enum(['simple', 'normal', 'ddim_uniform', 'karras', 'beta', 'exponential', 'sgm_uniform']);
+ 
+ // Z-Image scheduler options (Flow Matching schedulers)
+ // Note: LCM is only supported for Z-Image Turbo, not for Z-Image Base (undistilled)
+diff --git a/invokeai/frontend/web/src/features/nodes/util/graph/generation/buildFLUXGraph.ts b/invokeai/frontend/web/src/features/nodes/util/graph/generation/buildFLUXGraph.ts
+index dafcd9310e..f34837290f 100644
+--- a/invokeai/frontend/web/src/features/nodes/util/graph/generation/buildFLUXGraph.ts
++++ b/invokeai/frontend/web/src/features/nodes/util/graph/generation/buildFLUXGraph.ts
+@@ -56,6 +56,7 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
+     guidance: baseGuidance,
+     steps,
+     fluxScheduler,
++    fluxSigmaSchedule,
+     fluxDypePreset,
+     fluxDypeScale,
+     fluxDypeExponent,
+@@ -181,6 +182,7 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
+       id: getPrefixedId('flux2_denoise'),
+       num_steps: steps,
+       scheduler: fluxScheduler,
++      sigma_schedule: fluxSigmaSchedule,
+     });
+ 
+     // Klein: Connect Qwen3 encoder outputs
+@@ -215,6 +217,7 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
+       guidance,
+       num_steps: steps,
+       scheduler: fluxScheduler,
++      sigma_schedule: fluxSigmaSchedule,
+       dype_preset: fluxDypePreset,
+       // Only send custom scale/exponent when DyPE is not off
+       dype_scale: fluxDypeScale,
+@@ -250,6 +253,7 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
+       model: Graph.getModelMetadataField(model),
+       steps,
+       scheduler: fluxScheduler,
++      sigma_schedule: fluxSigmaSchedule,
+     };
+     if (kleinVaeModel) {
+       flux2Metadata.vae = kleinVaeModel;
+@@ -264,6 +268,7 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
+       model: Graph.getModelMetadataField(model),
+       steps,
+       scheduler: fluxScheduler,
++      sigma_schedule: fluxSigmaSchedule,
+       dype_preset: fluxDypePreset,
+       dype_scale: fluxDypePreset !== 'off' ? fluxDypeScale : undefined,
+       dype_exponent: fluxDypePreset !== 'off' ? fluxDypeExponent : undefined,
+diff --git a/invokeai/frontend/web/src/features/parameters/components/Core/ParamFluxScheduler.tsx b/invokeai/frontend/web/src/features/parameters/components/Core/ParamFluxScheduler.tsx
+index 46de945261..d1f2d409e1 100644
+--- a/invokeai/frontend/web/src/features/parameters/components/Core/ParamFluxScheduler.tsx
++++ b/invokeai/frontend/web/src/features/parameters/components/Core/ParamFluxScheduler.tsx
+@@ -5,18 +5,22 @@ import { InformationalPopover } from 'common/components/InformationalPopover/Inf
+ import { selectFluxScheduler, setFluxScheduler } from 'features/controlLayers/store/paramsSlice';
+ import { isParameterFluxScheduler } from 'features/parameters/types/parameterSchemas';
+ import { memo, useCallback, useMemo } from 'react';
+-import { useTranslation } from 'react-i18next';
+ 
+ // Flux-specific scheduler options (Flow Matching schedulers)
+ const FLUX_SCHEDULER_OPTIONS: ComboboxOption[] = [
+   { value: 'euler', label: 'Euler' },
+   { value: 'heun', label: 'Heun (2nd order)' },
+   { value: 'lcm', label: 'LCM' },
++  { value: 'dpmpp_2m', label: 'DPM++ 2M' },
++  { value: 'dpmpp_2m_sde', label: 'DPM++ 2M SDE' },
++  { value: 'dpmpp_sde', label: 'DPM++ SDE' },
++  { value: 'uni_pc', label: 'UniPC' },
++  { value: 'deis', label: 'DEIS' },
++  { value: 'sa_solver', label: 'SA-Solver PECE' },
+ ];
+ 
+ const ParamFluxScheduler = () => {
+   const dispatch = useAppDispatch();
+-  const { t } = useTranslation();
+   const fluxScheduler = useAppSelector(selectFluxScheduler);
+ 
+   const onChange = useCallback<ComboboxOnChange>(
+@@ -34,7 +38,7 @@ const ParamFluxScheduler = () => {
+   return (
+     <FormControl>
+       <InformationalPopover feature="paramScheduler">
+-        <FormLabel>{t('parameters.scheduler')}</FormLabel>
++        <FormLabel>Sampler</FormLabel>
+       </InformationalPopover>
+       <Combobox value={value} options={FLUX_SCHEDULER_OPTIONS} onChange={onChange} />
+     </FormControl>
+diff --git a/invokeai/frontend/web/src/features/parameters/types/parameterSchemas.ts b/invokeai/frontend/web/src/features/parameters/types/parameterSchemas.ts
+index eb2f1e6c15..93e8845875 100644
+--- a/invokeai/frontend/web/src/features/parameters/types/parameterSchemas.ts
++++ b/invokeai/frontend/web/src/features/parameters/types/parameterSchemas.ts
+@@ -8,6 +8,7 @@ import {
+   zFluxDypePresetField,
+   zFluxDypeScaleField,
+   zFluxSchedulerField,
++  zFluxSigmaScheduleField,
+   zModelIdentifierField,
+   zSchedulerField,
+   zZImageSchedulerField,
+@@ -76,6 +77,11 @@ export const [zParameterFluxScheduler, isParameterFluxScheduler] = buildParamete
+ export type ParameterFluxScheduler = z.infer<typeof zParameterFluxScheduler>;
+ // #endregion
+ 
++// #region Flux Sigma Schedule
++export const [zParameterFluxSigmaSchedule, isParameterFluxSigmaSchedule] = buildParameter(zFluxSigmaScheduleField);
++export type ParameterFluxSigmaSchedule = z.infer<typeof zParameterFluxSigmaSchedule>;
++// #endregion
++
+ // #region Z-Image Scheduler
+ export const [zParameterZImageScheduler, isParameterZImageScheduler] = buildParameter(zZImageSchedulerField);
+ export type ParameterZImageScheduler = z.infer<typeof zParameterZImageScheduler>;
+diff --git a/invokeai/frontend/web/src/features/settingsAccordions/components/GenerationSettingsAccordion/GenerationSettingsAccordion.tsx b/invokeai/frontend/web/src/features/settingsAccordions/components/GenerationSettingsAccordion/GenerationSettingsAccordion.tsx
+index 220008a38b..4381937fdc 100644
+--- a/invokeai/frontend/web/src/features/settingsAccordions/components/GenerationSettingsAccordion/GenerationSettingsAccordion.tsx
++++ b/invokeai/frontend/web/src/features/settingsAccordions/components/GenerationSettingsAccordion/GenerationSettingsAccordion.tsx
+@@ -25,6 +25,7 @@ import ParamFluxDypeExponent from 'features/parameters/components/Core/ParamFlux
+ import ParamFluxDypePreset from 'features/parameters/components/Core/ParamFluxDypePreset';
+ import ParamFluxDypeScale from 'features/parameters/components/Core/ParamFluxDypeScale';
+ import ParamFluxScheduler from 'features/parameters/components/Core/ParamFluxScheduler';
++import ParamFluxSigmaSchedule from 'features/parameters/components/Core/ParamFluxSigmaSchedule';
+ import ParamGuidance from 'features/parameters/components/Core/ParamGuidance';
+ import ParamQwenImageShift from 'features/parameters/components/Core/ParamQwenImageShift';
+ import ParamScheduler from 'features/parameters/components/Core/ParamScheduler';
+@@ -106,6 +107,7 @@ export const GenerationSettingsAccordion = memo(() => {
+                   !isQwenImage &&
+                   !isAnima && <ParamScheduler />}
+                 {!isExternal && (isFLUX || isFlux2) && <ParamFluxScheduler />}
++                {!isExternal && (isFLUX || isFlux2) && <ParamFluxSigmaSchedule />}
+                 {!isExternal && isZImage && <ParamZImageScheduler />}
+                 {!isExternal && isAnima && <ParamAnimaScheduler />}
+                 {modelSupportsSteps && <ParamSteps />}
+diff --git a/invokeai/frontend/web/src/services/api/schema.ts b/invokeai/frontend/web/src/services/api/schema.ts
+index 087a94fcb1..ef96a3f86e 100644
+--- a/invokeai/frontend/web/src/services/api/schema.ts
++++ b/invokeai/frontend/web/src/services/api/schema.ts
+@@ -3079,7 +3079,7 @@ export type components = {
+              * @default euler
+              * @enum {string}
+              */
+-            scheduler?: "euler" | "heun" | "lcm";
++            scheduler?: "euler" | "heun" | "lcm" | "dpmpp_2m" | "dpmpp_2m_sde" | "dpmpp_sde" | "uni_pc" | "deis";
+             /**
+              * type
+              * @default anima_denoise
+@@ -10143,7 +10143,14 @@ export type components = {
+              * @default euler
+              * @enum {string}
+              */
+-            scheduler?: "euler" | "heun" | "lcm";
++            scheduler?: "euler" | "heun" | "lcm" | "dpmpp_2m" | "dpmpp_2m_sde" | "dpmpp_sde" | "uni_pc" | "deis" | "sa_solver";
++            /**
++             * Sigma Schedule
++             * @description Sigma schedule type for noise generation.
++             * @default simple
++             * @enum {string}
++             */
++            sigma_schedule?: "simple" | "normal" | "ddim_uniform" | "karras" | "beta" | "exponential" | "sgm_uniform";
+             /**
+              * Seed
+              * @description Randomness seed for reproducibility.
+@@ -10904,7 +10911,14 @@ export type components = {
+              * @default euler
+              * @enum {string}
+              */
+-            scheduler?: "euler" | "heun" | "lcm";
++            scheduler?: "euler" | "heun" | "lcm" | "dpmpp_2m" | "dpmpp_2m_sde" | "dpmpp_sde" | "uni_pc" | "deis" | "sa_solver";
++            /**
++             * Sigma Schedule
++             * @description Sigma schedule type for noise generation.
++             * @default simple
++             * @enum {string}
++             */
++            sigma_schedule?: "simple" | "normal" | "ddim_uniform" | "karras" | "beta" | "exponential" | "sgm_uniform";
+             /**
+              * Guidance
+              * @description The guidance strength. Higher values adhere more strictly to the prompt, and will produce less diverse images. FLUX dev only, ignored for schnell.
+@@ -11098,7 +11112,14 @@ export type components = {
+              * @default euler
+              * @enum {string}
+              */
+-            scheduler?: "euler" | "heun" | "lcm";
++            scheduler?: "euler" | "heun" | "lcm" | "dpmpp_2m" | "dpmpp_2m_sde" | "dpmpp_sde" | "uni_pc" | "deis" | "sa_solver";
++            /**
++             * Sigma Schedule
++             * @description Sigma schedule type for noise generation.
++             * @default simple
++             * @enum {string}
++             */
++            sigma_schedule?: "simple" | "normal" | "ddim_uniform" | "karras" | "beta" | "exponential" | "sgm_uniform";
+             /**
+              * Guidance
+              * @description The guidance strength. Higher values adhere more strictly to the prompt, and will produce less diverse images. FLUX dev only, ignored for schnell.
+@@ -19341,6 +19362,16 @@ export type components = {
+              * @description Whether this model should run on CPU only
+              */
+             cpu_only?: boolean | null;
++            /**
++             * Flux Sampler
++             * @description Default sampler for Flux models (e.g. euler, dpmpp_2m)
++             */
++            flux_sampler?: ("euler" | "heun" | "lcm" | "dpmpp_2m" | "dpmpp_2m_sde" | "dpmpp_sde" | "uni_pc" | "deis" | "sa_solver") | null;
++            /**
++             * Flux Scheduler
++             * @description Default scheduler (sigma schedule) for Flux models (e.g. normal, beta, karras)
++             */
++            flux_scheduler?: ("simple" | "normal" | "ddim_uniform" | "karras" | "beta" | "exponential" | "sgm_uniform") | null;
+         };
+         /**
+          * Main Model - SD1.5, SD2
+@@ -31602,7 +31633,7 @@ export type components = {
+              * @default euler
+              * @enum {string}
+              */
+-            scheduler?: "euler" | "heun" | "lcm";
++            scheduler?: "euler" | "heun" | "lcm" | "dpmpp_2m" | "dpmpp_2m_sde" | "dpmpp_sde" | "uni_pc" | "deis";
+             /**
+              * type
+              * @default z_image_denoise
+@@ -31735,7 +31766,7 @@ export type components = {
+              * @default euler
+              * @enum {string}
+              */
+-            scheduler?: "euler" | "heun" | "lcm";
++            scheduler?: "euler" | "heun" | "lcm" | "dpmpp_2m" | "dpmpp_2m_sde" | "dpmpp_sde" | "uni_pc" | "deis";
+             /**
+              * type
+              * @default z_image_denoise_meta
+diff --git a/update.bat b/update.bat
+index aea3a05c07..6cc2b3adab 100644
+--- a/update.bat
++++ b/update.bat
+@@ -4,21 +4,19 @@ setlocal EnableExtensions EnableDelayedExpansion
+ set "PAUSE_ON_EXIT=1"
+ if /i "%~1"=="--no-pause" set "PAUSE_ON_EXIT=0"
+ 
+-REM InvokeAI batch fork: merge upstream/main + rebuild frontend
+-REM - Fetches upstream/main and merges into feature/batch-tester
+-REM - Pushes merge to origin (personal fork)
+-REM - Syncs version from latest upstream tag
++REM InvokeAI Batch+: rebuild frontend only (no git - independent copy)
++REM - Installs frontend deps with pnpm
+ REM - Builds UI to invokeai/frontend/web/dist
+ 
+ set "REPO_ROOT=%~dp0"
+ set "LOGFILE=%REPO_ROOT%update.log"
+->"%LOGFILE%" echo InvokeAI batch-fork update log - %DATE% %TIME%
++>"%LOGFILE%" echo InvokeAI batch+ update log - %DATE% %TIME%
+ >>"%LOGFILE%" echo Repo root: %REPO_ROOT%
+ >>"%LOGFILE%" echo.
+ 
+ echo.
+ echo ============================================================
+-echo  InvokeAI Batch Fork: Update + Rebuild Frontend
++echo  InvokeAI Batch+: Rebuild Frontend
+ echo  Repo: %REPO_ROOT%
+ echo ============================================================
+ echo  Log:  %LOGFILE%
+@@ -27,14 +25,6 @@ echo.
+ cd /d "%REPO_ROOT%" || goto :fail
+ 
+ REM --- prerequisites ---
+-where git >nul 2>nul
+-if !errorlevel! neq 0 (
+-	echo ERROR: git not found in PATH.
+-	>>"%LOGFILE%" echo ERROR: git not found in PATH.
+-	goto :fail
+-)
+-git --version >>"%LOGFILE%" 2>&1
+-
+ where node >nul 2>nul
+ if !errorlevel! neq 0 (
+ 	echo ERROR: node not found in PATH.
+@@ -43,108 +33,13 @@ if !errorlevel! neq 0 (
+ )
+ node --version >>"%LOGFILE%" 2>&1
+ 
+-REM --- update repo ---
+-echo [1/3] Merging upstream/main into feature/batch-tester...
+-git rev-parse --is-inside-work-tree >nul 2>nul
+-if !errorlevel! neq 0 (
+-	echo ERROR: Not a git repository.
+-	>>"%LOGFILE%" echo ERROR: Not a git repo.
+-	goto :fail
+-)
+-
+-REM Make sure we are on the feature branch
+-for /f %%B in ('git rev-parse --abbrev-ref HEAD') do set "CUR_BRANCH=%%B"
+-if "!CUR_BRANCH!" neq "feature/batch-tester" (
+-	echo Switching to feature/batch-tester...
+-	git checkout feature/batch-tester
+-	if !errorlevel! neq 0 (
+-		echo ERROR: Could not switch to feature/batch-tester.
+-		>>"%LOGFILE%" echo ERROR: checkout feature/batch-tester failed.
+-		goto :fail
+-	)
+-)
+-
+-echo Running: git fetch upstream
+-git fetch upstream
+-if !errorlevel! neq 0 (
+-	echo ERROR: git fetch upstream failed.
+-	>>"%LOGFILE%" echo ERROR: git fetch upstream failed.
+-	goto :fail
+-)
+-
+-echo Running: git fetch upstream --tags
+-git fetch upstream --tags
+-if !errorlevel! neq 0 (
+-	echo WARNING: git fetch tags failed, version sync may use stale tag.
+-	>>"%LOGFILE%" echo WARNING: git fetch tags failed.
+-)
+-
+-REM Check if upstream/main has new commits
+-git merge-base --is-ancestor upstream/main HEAD >nul 2>nul
+-if !errorlevel! equ 0 (
+-	echo upstream/main is already merged - no new upstream commits.
+-	>>"%LOGFILE%" echo upstream/main already merged.
+-) else (
+-	echo Running: git merge upstream/main --no-edit
+-	git merge upstream/main --no-edit
+-	if !errorlevel! neq 0 (
+-		echo ERROR: Merge conflict - resolve manually then re-run.
+-		>>"%LOGFILE%" echo ERROR: merge upstream/main failed ^(conflict?^).
+-		goto :fail
+-	)
+-	echo Pushing merge to origin...
+-	git push origin feature/batch-tester
+-	if !errorlevel! neq 0 (
+-		echo WARNING: Push to origin failed. Continuing with local build.
+-		>>"%LOGFILE%" echo WARNING: push to origin failed.
+-	)
+-)
+-
+-echo Running: git submodule update --init --recursive
+-git submodule update --init --recursive
+-if !errorlevel! neq 0 (
+-	echo ERROR: git submodule update failed.
+-	>>"%LOGFILE%" echo ERROR: git submodule update failed.
+-	goto :fail
+-)
+-
+-REM --- sync version to latest upstream tag ---
+-echo Syncing version from latest git tag...
+-set "VER_FILE=invokeai\version\invokeai_version.py"
+-
+-for /f %%T in ('git tag --list "v6*" --sort=-version:refname') do (
+-	set "LATEST_TAG=%%T"
+-	goto :got_tag
+-)
+-:got_tag
+-
+-if not defined LATEST_TAG (
+-	echo WARNING: No v6* tag found, skipping version sync.
+-	goto :after_ver
+-)
+-
+-set "TAG_VER=!LATEST_TAG:~1!"
+-
+-for /f "usebackq tokens=*" %%L in ("%REPO_ROOT%%VER_FILE%") do set "VER_LINE=%%L"
+-echo !VER_LINE! | findstr /c:"!TAG_VER!" >nul 2>nul
+-if !errorlevel! neq 0 (
+-	echo Updating version to !TAG_VER! ^(from tag !LATEST_TAG!^)
+-	>>"%LOGFILE%" echo Updated version to !TAG_VER! from tag !LATEST_TAG!
+-	>"!REPO_ROOT!!VER_FILE!" echo __version__ = "!TAG_VER!"
+-)
+-
+-:after_ver
+-set "LATEST_TAG="
+-set "TAG_VER="
+-set "VER_LINE="
+-
+ REM --- suppress vite chunk size warnings ---
+ set "VITE_CFG=invokeai\frontend\web\vite.config.mts"
+ powershell -NoProfile -Command "(Get-Content '%REPO_ROOT%%VITE_CFG%') -replace 'chunkSizeWarningLimit: \d+', 'chunkSizeWarningLimit: 4000' | Set-Content '%REPO_ROOT%%VITE_CFG%'" >nul 2>nul
+ 
+ REM --- rebuild frontend ---
+ echo.
+-echo [2/3] Installing frontend deps and building UI...
++echo [1/2] Installing frontend deps and building UI...
+ if not exist "invokeai\frontend\web\package.json" (
+ 	echo ERROR: Expected frontend at invokeai\frontend\web\package.json
+ 	>>"%LOGFILE%" echo ERROR: frontend not found.
+@@ -156,6 +51,7 @@ cd /d "%REPO_ROOT%invokeai\frontend\web" || goto :fail
+ set "COREPACK_ENABLE_AUTO_PIN=0"
+ set "COREPACK_ENABLE_STRICT=0"
+ 
++REM Find pnpm
+ set "PNPM_CMD="
+ where pnpm >nul 2>nul
+ if !errorlevel! equ 0 (
+@@ -190,7 +86,7 @@ if !errorlevel! neq 0 (
+ )
+ 
+ echo.
+-echo Running: vite build (skipping upstream lint/tests for local deploy)
++echo Running: vite build
+ call npx vite build
+ if !errorlevel! neq 0 (
+ 	echo ERROR: vite build failed.
+@@ -198,6 +94,7 @@ if !errorlevel! neq 0 (
+ 	goto :fail
+ )
+ 
++REM Verify the build produced output
+ if not exist "%REPO_ROOT%invokeai\frontend\web\dist\index.html" (
+ 	echo ERROR: Build completed but dist\index.html not found.
+ 	>>"%LOGFILE%" echo ERROR: dist\index.html missing after build.
+@@ -207,7 +104,7 @@ if not exist "%REPO_ROOT%invokeai\frontend\web\dist\index.html" (
+ cd /d "%REPO_ROOT%"
+ 
+ echo.
+-echo [3/3] Done.
++echo [2/2] Done.
+ echo UI output: invokeai\frontend\web\dist
+ echo.
+ >>"%LOGFILE%" echo SUCCESS - %DATE% %TIME%

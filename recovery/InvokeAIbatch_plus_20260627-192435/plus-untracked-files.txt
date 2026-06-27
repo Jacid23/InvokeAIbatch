@@ -1,0 +1,5 @@
+CHANGES.md
+PLAN.md
+invokeai/frontend/web/src/features/modelManagerV2/subpanels/ModelPanel/MainModelDefaultSettings/DefaultFluxSampler.tsx
+invokeai/frontend/web/src/features/modelManagerV2/subpanels/ModelPanel/MainModelDefaultSettings/DefaultFluxScheduler.tsx
+invokeai/frontend/web/src/features/parameters/components/Core/ParamFluxSigmaSchedule.tsx
