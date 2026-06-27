@@ -505,6 +505,8 @@ class Main_Checkpoint_FLUX_Config(Checkpoint_Config_Base, Main_Config_Base, Conf
             {
                 "double_blocks.0.img_attn.norm.key_norm.scale",
                 "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.scale",
+                "double_blocks.0.img_attn.norm.key_norm.weight",
+                "model.diffusion_model.double_blocks.0.img_attn.norm.key_norm.weight",
             },
         ):
             raise NotAMatchError("state dict does not look like a FLUX checkpoint")
