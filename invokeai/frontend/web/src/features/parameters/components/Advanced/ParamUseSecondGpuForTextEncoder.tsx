@@ -22,7 +22,7 @@ import {
 import type { ModelIdentifierField } from 'features/nodes/types/common';
 import { toast } from 'features/toast/toast';
 import type { ChangeEvent } from 'react';
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   useGetAppDepsQuery,
   useGetRuntimeConfigQuery,
@@ -82,6 +82,7 @@ const ParamUseSecondGpuForTextEncoder = () => {
   const [syncTextEncoderCache, { isLoading: isSyncing }] = useSyncTextEncoderCacheMutation();
   const [getTextEncoderCacheStatus, { isLoading: isLoadingStatus }] = useGetTextEncoderCacheStatusMutation();
   const [cacheStatus, setCacheStatus] = useState<TextEncoderCacheStatus | null>(null);
+  const autoSyncKeyRef = useRef<string | null>(null);
 
   const cudaDeviceCount = useMemo(() => getCudaDeviceCount(appDeps), [appDeps]);
   const isAvailable = runtimeConfig
@@ -127,6 +128,7 @@ const ParamUseSecondGpuForTextEncoder = () => {
   ]);
   const loadedCount = cacheStatus?.models.filter((model) => model.loaded).length ?? 0;
   const selectedCount = selectedTextEncoderModels.length;
+  const selectedTextEncoderModelKey = selectedTextEncoderModels.map((model) => model.key).join('|');
   const encoderCacheStatusLabel =
     isSyncing || isLoadingStatus
       ? 'Syncing'
@@ -144,11 +146,40 @@ const ParamUseSecondGpuForTextEncoder = () => {
       text_encoder_models: selectedTextEncoderModels,
     })
       .unwrap()
-      .then(setCacheStatus)
+      .then((status) => {
+        setCacheStatus(status);
+
+        const shouldAutoLoad =
+          runtimeConfig.config.use_second_gpu_for_text_encoder &&
+          selectedTextEncoderModels.length > 0 &&
+          status.models.some((model) => !model.loaded);
+
+        if (!shouldAutoLoad || autoSyncKeyRef.current === selectedTextEncoderModelKey) {
+          return;
+        }
+
+        autoSyncKeyRef.current = selectedTextEncoderModelKey;
+        syncTextEncoderCache({
+          enabled: true,
+          text_encoder_models: selectedTextEncoderModels,
+        })
+          .unwrap()
+          .then((result) => setCacheStatus(result.status))
+          .catch(() => {
+            autoSyncKeyRef.current = null;
+          });
+      })
       .catch(() => {
         setCacheStatus(null);
       });
-  }, [getTextEncoderCacheStatus, isAvailable, runtimeConfig, selectedTextEncoderModels]);
+  }, [
+    getTextEncoderCacheStatus,
+    isAvailable,
+    runtimeConfig,
+    selectedTextEncoderModelKey,
+    selectedTextEncoderModels,
+    syncTextEncoderCache,
+  ]);
 
   const onChange = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {

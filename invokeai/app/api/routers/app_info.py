@@ -1,3 +1,5 @@
+import csv
+import io
 import locale
 import subprocess
 from enum import Enum
@@ -342,12 +344,61 @@ def _get_system_gpu_statuses() -> list[SystemGpuStatus]:
     return statuses
 
 
+def _get_windows_task_manager_cpu_status() -> tuple[float, float | None] | None:
+    """Get CPU status using the same Windows performance counters Task Manager uses."""
+    try:
+        result = subprocess.run(
+            [
+                "typeperf",
+                r"\Processor Information(_Total)\% Processor Utility",
+                r"\Processor Information(_Total)\% Processor Performance",
+                "-sc",
+                "1",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=3,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+
+    if result.returncode != 0:
+        return None
+
+    reader = csv.reader(io.StringIO(result.stdout))
+    for row in reader:
+        if len(row) < 3 or row[0].startswith("(PDH-CSV"):
+            continue
+        try:
+            cpu_percent = float(row[1])
+            processor_performance = float(row[2])
+        except ValueError:
+            continue
+
+        cpu_frequency = psutil.cpu_freq()
+        base_frequency_mhz = None if cpu_frequency is None else cpu_frequency.max or cpu_frequency.current
+        cpu_frequency_ghz = (
+            None if base_frequency_mhz is None else round((base_frequency_mhz * processor_performance / 100) / 1000, 2)
+        )
+        return round(cpu_percent, 1), cpu_frequency_ghz
+
+    return None
+
+
 def _get_system_status() -> SystemStatusResponse:
     memory = psutil.virtual_memory()
-    cpu_frequency = psutil.cpu_freq()
+    cpu_status = _get_windows_task_manager_cpu_status()
+    if cpu_status is None:
+        cpu_frequency = psutil.cpu_freq()
+        cpu_percent = round(psutil.cpu_percent(interval=0.2), 1)
+        cpu_frequency_ghz = None if cpu_frequency is None else round(cpu_frequency.current / 1000, 2)
+    else:
+        cpu_percent, cpu_frequency_ghz = cpu_status
+
     return SystemStatusResponse(
-        cpu_percent=round(psutil.cpu_percent(interval=None), 1),
-        cpu_frequency_ghz=None if cpu_frequency is None else round(cpu_frequency.current / 1000, 2),
+        cpu_percent=cpu_percent,
+        cpu_frequency_ghz=cpu_frequency_ghz,
         memory_used_gb=round((memory.total - memory.available) / (1024**3), 1),
         memory_total_gb=round(memory.total / (1024**3), 1),
         memory_percent=round(memory.percent, 1),
