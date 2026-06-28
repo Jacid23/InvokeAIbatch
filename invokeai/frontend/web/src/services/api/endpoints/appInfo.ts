@@ -221,7 +221,7 @@ type TextEncoderCacheStatusResponse = {
   }[];
 };
 
-export type SystemStatusResponse = {
+type SystemStatusResponse = {
   cpu_percent: number;
   cpu_frequency_ghz: number | null;
   memory_used_gb: number;

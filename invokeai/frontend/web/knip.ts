@@ -22,7 +22,7 @@ const config: KnipConfig = {
     'src/features/batch/**',
   ],
   ignoreBinaries: ['only-allow'],
-  ignoreDependencies: ['magic-string', '@babel/preset-typescript', 'babel-plugin-react-compiler'],
+  ignoreDependencies: ['magic-string', '@babel/preset-typescript', 'babel-plugin-react-compiler', 'util'],
   paths: {
     'public/*': ['public/*'],
   },

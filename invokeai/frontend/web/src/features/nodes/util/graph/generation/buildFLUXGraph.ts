@@ -182,7 +182,6 @@ export const buildFLUXGraph = async (arg: GraphBuilderArg): Promise<GraphBuilder
       id: getPrefixedId('flux2_denoise'),
       num_steps: steps,
       scheduler: fluxScheduler,
-      sigma_schedule: fluxSigmaSchedule,
     });
 
     // Klein: Connect Qwen3 encoder outputs

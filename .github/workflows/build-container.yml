@@ -9,7 +9,7 @@ on:
       - 'invokeai/**'
       - 'docker/Dockerfile'
       - 'docker/docker-entrypoint.sh'
-      - 'workflows/build-container.yml'
+      - '.github/workflows/build-container.yml'
     tags:
       - 'v*.*.*'
   workflow_dispatch:
@@ -25,8 +25,26 @@ permissions:
   packages: write
 
 jobs:
+  check-docker-files:
+    runs-on: ubuntu-latest
+    outputs:
+      has-docker-files: ${{ steps.check.outputs.has-docker-files }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Check Docker files
+        id: check
+        run: |
+          if [ -f docker/Dockerfile ]; then
+            echo "has-docker-files=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has-docker-files=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping container build because docker/Dockerfile is not present in this branch."
+          fi
+
   docker:
-    if: github.event.pull_request.draft == false
+    needs: check-docker-files
+    if: github.event.pull_request.draft == false && needs.check-docker-files.outputs.has-docker-files == 'true'
     strategy:
       fail-fast: false
       matrix:
